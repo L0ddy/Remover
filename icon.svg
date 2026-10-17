@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
   <defs>
-    <linearGradient id="redBgGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ef4444" />
-      <stop offset="100%" stop-color="#b91c1c" />
+    <linearGradient id="blackBgGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#18181b" />
+      <stop offset="100%" stop-color="#000000" />
     </linearGradient>
   </defs>
 
-  <!-- Kırmızı Arka Plan -->
-  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#redBgGrad)" />
+  <!-- Siyah Arka Plan -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#blackBgGrad)" />
 
   <!-- Tam Ortalanmış Beyaz Belge Gövdesi (x: 16..48, y: 12..54) -->
   <rect x="16" y="12" width="32" height="42" rx="4.5" fill="#ffffff" />
@@ -21,9 +21,9 @@
 
   <!-- Dosyanın Sağ Üst Köşesinin Üstüne Gelen Yıldızlar -->
   <!-- Ana Büyük Yıldız (Tam sağ üst köşenin üstüne biner: merkez 46, 14) -->
-  <path d="M46 5.5L48.2 11.8L54.5 14L48.2 16.2L46 22.5L43.8 16.2L37.5 14L43.8 11.8L46 5.5Z" fill="#facc15" stroke="#b91c1c" stroke-width="1.2" stroke-linejoin="round" />
+  <path d="M46 5.5L48.2 11.8L54.5 14L48.2 16.2L46 22.5L43.8 16.2L37.5 14L43.8 11.8L46 5.5Z" fill="#facc15" stroke="#000000" stroke-width="1.2" stroke-linejoin="round" />
   <!-- Üst Sol Küçük Yıldız (Dosyanın üst kenarının üzerine biner: merkez 37.5, 9.5) -->
-  <path d="M37.5 5L38.6 8.4L42 9.5L38.6 10.6L37.5 14L36.4 10.6L33 9.5L36.4 8.4L37.5 5Z" fill="#fef08a" stroke="#b91c1c" stroke-width="0.9" stroke-linejoin="round" />
+  <path d="M37.5 5L38.6 8.4L42 9.5L38.6 10.6L37.5 14L36.4 10.6L33 9.5L36.4 8.4L37.5 5Z" fill="#fef08a" stroke="#000000" stroke-width="0.9" stroke-linejoin="round" />
   <!-- Sağ Alt Orta Yıldız (Dosyanın sağ kenarının üzerine biner: merkez 50.5, 23.5) -->
-  <path d="M50.5 18.5L51.8 22.2L55.5 23.5L51.8 24.8L50.5 28.5L49.2 24.8L45.5 23.5L49.2 22.2L50.5 18.5Z" fill="#fde047" stroke="#b91c1c" stroke-width="1" stroke-linejoin="round" />
+  <path d="M50.5 18.5L51.8 22.2L55.5 23.5L51.8 24.8L50.5 28.5L49.2 24.8L45.5 23.5L49.2 22.2L50.5 18.5Z" fill="#fde047" stroke="#000000" stroke-width="1" stroke-linejoin="round" />
 </svg>
