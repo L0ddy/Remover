@@ -843,17 +843,216 @@
       line-height: 1.45;
     }
 
+    /* Mobil / Dokunmatik Dahili PDF.js Görüntüleyici */
+    .mobile-pdf-viewer {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      background: #334155;
+      overflow: hidden;
+    }
+
+    .mobile-pdf-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      flex-wrap: wrap;
+    }
+
+    .mobile-pdf-toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mobile-toolbar-btn {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .mobile-toolbar-btn:active {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .mobile-pdf-pages {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 8px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .mobile-page-card {
+      background: #ffffff;
+      border-radius: 6px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      max-width: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .mobile-page-card canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .mobile-page-badge {
+      position: absolute;
+      bottom: 6px;
+      right: 8px;
+      background: rgba(15, 23, 42, 0.72);
+      color: #ffffff;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 99px;
+      pointer-events: none;
+    }
+
+    .mobile-close-drawer-btn {
+      display: none;
+    }
+
     @media (max-width: 960px) {
-      .workspace {
-        grid-template-columns: 1fr;
+      body {
+        height: auto;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
       }
+
+      header {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .brand-text p {
+        font-size: 11px;
+      }
+
+      .header-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .header-actions .btn-sm {
+        width: 100%;
+        padding: 9px 10px;
+        font-size: 12px;
+      }
+
+      .workspace {
+        display: flex;
+        flex-direction: column;
+        flex: none;
+      }
+
       .sidebar {
         border-right: none;
         border-bottom: 1px solid var(--border);
-        max-height: 44vh;
+        max-height: none;
+        overflow: visible;
+        padding: 14px;
       }
+
+      .option-item {
+        padding: 4px 0;
+        font-size: 13.5px;
+      }
+
+      .option-item input[type="checkbox"] {
+        width: 19px;
+        height: 19px;
+      }
+
+      .color-chip {
+        padding: 6px 11px;
+        font-size: 12px;
+      }
+
+      .main-area {
+        min-height: 82dvh;
+      }
+
+      .tabs-bar {
+        padding: 0 12px;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .tab-btn {
+        padding: 11px 10px;
+        font-size: 12.5px;
+      }
+
+      #pageStatsLabel {
+        width: 100%;
+        padding-bottom: 8px;
+        font-size: 11.5px !important;
+      }
+
+      .pdf-viewer-container {
+        height: 80dvh;
+        min-height: 480px;
+      }
+
+      .empty-state {
+        margin: 20px 14px;
+        padding: 24px 16px;
+      }
+
+      /* Telefonda Yan Optik Form tam ekran çekmece (modal) olarak açılır */
       .optical-drawer {
-        width: 300px;
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100dvh;
+        z-index: 200;
+        border-left: none;
+      }
+
+      .mobile-close-drawer-btn {
+        display: inline-flex;
+      }
+
+      .bubble {
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+      }
+
+      .answer-key-pane {
+        padding: 14px;
       }
     }
   </style>
@@ -908,9 +1107,9 @@
         <div class="card-title">1. PDF Dosyası Yükle</div>
         <div id="dropzone" class="dropzone" onclick="document.getElementById('pdfInput').click()">
           <div class="dropzone-icon">📄</div>
-          <h3>PDF Dosyasını Buraya Sürükleyin</h3>
-          <p>veya bilgisayarınızdan seçmek için tıklayın<br/>(Yüklendiğinde orijinal haliyle açılır)</p>
-          <input type="file" id="pdfInput" accept="application/pdf" style="display:none" onchange="handleFileSelect(event)" />
+          <h3>PDF Dosyasını Seçin veya Sürükleyin</h3>
+          <p>Bilgisayarınızdan veya telefonunuzdan seçmek için dokunun<br/>(Yüklendiğinde orijinal haliyle açılır)</p>
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf" style="display:none" onchange="handleFileSelect(event)" />
         </div>
         <div id="fileBadge" class="file-badge">
           <span id="fileBadgeText" class="file-badge-info"></span>
@@ -1030,7 +1229,7 @@
     </aside>
 
     <!-- SAĞ ÇALIŞMA ALANI -->
-    <main class="main-area">
+    <main class="main-area" id="mainPreviewArea">
       <div class="tabs-bar">
         <div class="tabs">
           <button class="tab-btn active" id="tabBtnPreview" onclick="switchTab('preview')">
@@ -1055,7 +1254,7 @@
               <h2>PDF Testiniz Orijinal Kalitesinde Hazır</h2>
               <p>
                 Sol taraftan PDF dosyanızı seçin veya sürükleyin.
-                PDF ilk yüklendiğinde <strong>orijinal (varsayılan) haliyle</strong> açılır; ardından soldan istediğiniz temizleme seçeneklerini işaretleyebilirsiniz.
+                PDF ilk yüklendiğinde <strong>orijinal (varsayılan) haliyle</strong> açılır; ardından istediğiniz temizleme seçeneklerini işaretleyebilirsiniz.
               </p>
               <div class="feature-pills">
                 <span class="feature-pill">📄 Varsayılan Orijinal Başlangıç</span>
@@ -1065,6 +1264,24 @@
               </div>
             </div>
             <iframe id="pdfPreviewFrame" class="pdf-iframe" title="Temiz PDF Önizleme"></iframe>
+            <!-- Mobil & Tablet Tarayıcılar İçin Dahili Yüksek Çözünürlüklü PDF.js Görüntüleyici -->
+            <div id="mobilePdfViewer" class="mobile-pdf-viewer">
+              <div class="mobile-pdf-toolbar">
+                <div class="mobile-pdf-toolbar-group">
+                  <span id="mobilePageCounter">📄 0 Sayfa</span>
+                </div>
+                <div class="mobile-pdf-toolbar-group">
+                  <button type="button" class="mobile-toolbar-btn" onclick="changeMobileZoom(-0.25)">➖</button>
+                  <span id="mobileZoomLabel" style="min-width:40px; text-align:center;">100%</span>
+                  <button type="button" class="mobile-toolbar-btn" onclick="changeMobileZoom(0.25)">➕</button>
+                </div>
+                <div class="mobile-pdf-toolbar-group">
+                  <button type="button" class="mobile-toolbar-btn" onclick="openPdfInNewTab()">🔍 Tam Ekran</button>
+                  <button type="button" class="mobile-toolbar-btn" style="background:#16a34a; border-color:#22c55e;" onclick="downloadCleanPdf()">📥 İndir</button>
+                </div>
+              </div>
+              <div id="mobilePdfPages" class="mobile-pdf-pages"></div>
+            </div>
           </div>
 
           <!-- YAN OPTİK FORM -->
@@ -1072,7 +1289,10 @@
             <div class="optical-header">
               <div class="optical-top-row">
                 <h3>📝 İnteraktif Optik Form</h3>
-                <button class="btn btn-outline btn-sm" style="padding:4px 8px; font-size:11px;" onclick="resetOpticalMarks()">Sıfırla</button>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <button class="btn btn-outline btn-sm" style="padding:4px 8px; font-size:11px;" onclick="resetOpticalMarks()">Sıfırla</button>
+                  <button class="btn btn-primary btn-sm mobile-close-drawer-btn" style="padding:4px 10px; font-size:11px;" onclick="toggleOpticalDrawer()">✕ Kapat</button>
+                </div>
               </div>
               <div class="optical-controls">
                 <select id="optSubjectFilter" onchange="renderOpticalList()">
@@ -1189,6 +1409,11 @@
     const iframe = document.getElementById('pdfPreviewFrame');
     iframe.src = 'about:blank';
     iframe.style.display = 'none';
+    const mobileViewer = document.getElementById('mobilePdfViewer');
+    if (mobileViewer) {
+      mobileViewer.style.display = 'none';
+      document.getElementById('mobilePdfPages').innerHTML = '';
+    }
     document.getElementById('emptyState').style.display = 'block';
 
     document.getElementById('downloadCleanPdfBtn').disabled = true;
@@ -2236,8 +2461,134 @@
   }
 
   // ============================================================================
-  // ARAYÜZ GÜNCELLEME, ÖNİZLEME, OPTİK FORM VE İNDİRME
+  // ARAYÜZ GÜNCELLEME, MOBİL PDF.JS ÖNİZLEME, OPTİK FORM VE İNDİRME
   // ============================================================================
+  let mobileZoomFactor = 1.0;
+  let mobileRenderToken = 0;
+  let activeMobileObserver = null;
+
+  function useMobileCanvasViewer() {
+    const ua = navigator.userAgent || '';
+    const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isIPadOS = navigator.maxTouchPoints > 1 && /Macintosh/.test(ua);
+    return isMobileUa || isIPadOS || window.innerWidth <= 960;
+  }
+
+  function scrollToPreviewOnMobile() {
+    const el = document.getElementById('mainPreviewArea');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function openPdfInNewTab() {
+    if (!convertedPdfBlobUrl) return;
+    window.open(convertedPdfBlobUrl, '_blank');
+  }
+
+  async function changeMobileZoom(delta) {
+    mobileZoomFactor = Math.min(2.25, Math.max(0.75, +(mobileZoomFactor + delta).toFixed(2)));
+    const lbl = document.getElementById('mobileZoomLabel');
+    if (lbl) lbl.textContent = `${Math.round(mobileZoomFactor * 100)}%`;
+    if (convertedPdfBytes && useMobileCanvasViewer()) {
+      await renderMobilePdfPreview(convertedPdfBytes);
+    }
+  }
+
+  async function renderMobilePdfPreview(pdfBytes) {
+    if (!window.pdfjsLib || !pdfBytes) return;
+    const myRenderId = ++mobileRenderToken;
+    if (activeMobileObserver) {
+      activeMobileObserver.disconnect();
+      activeMobileObserver = null;
+    }
+
+    const container = document.getElementById('mobilePdfPages');
+    const counterEl = document.getElementById('mobilePageCounter');
+    container.innerHTML =
+      '<div style="color:#e2e8f0; padding:24px; font-size:13px;">⏳ Sayfalar telefona uygun hazırlanıyor...</div>';
+
+    try {
+      const pdfDoc = await window.pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
+      if (myRenderId !== mobileRenderToken) return;
+
+      const numPages = pdfDoc.numPages;
+      if (counterEl) counterEl.textContent = `📄 ${numPages} Sayfa`;
+      container.innerHTML = '';
+
+      const firstPage = await pdfDoc.getPage(1);
+      if (myRenderId !== mobileRenderToken) return;
+      const baseVp = firstPage.getViewport({ scale: 1 });
+      const containerWidth = Math.max(280, (container.clientWidth || window.innerWidth) - 20);
+      const fitScale = (containerWidth / baseVp.width) * mobileZoomFactor;
+      const dpr = Math.min(window.devicePixelRatio || 2, 2.5);
+
+      const pageCards = [];
+      for (let p = 1; p <= numPages; p++) {
+        const card = document.createElement('div');
+        card.className = 'mobile-page-card';
+        card.dataset.page = String(p);
+        const cssW = Math.round(baseVp.width * fitScale);
+        const cssH = Math.round(baseVp.height * fitScale);
+        card.style.width = `${cssW}px`;
+        card.style.minHeight = `${cssH}px`;
+        card.style.maxWidth = mobileZoomFactor > 1 ? 'none' : '100%';
+
+        const badge = document.createElement('div');
+        badge.className = 'mobile-page-badge';
+        badge.textContent = `Sayfa ${p} / ${numPages}`;
+        card.appendChild(badge);
+
+        container.appendChild(card);
+        pageCards.push(card);
+      }
+
+      async function renderSingleMobilePage(cardEl) {
+        if (cardEl.dataset.rendered === '1' || myRenderId !== mobileRenderToken) return;
+        cardEl.dataset.rendered = '1';
+        const pNum = parseInt(cardEl.dataset.page, 10);
+        try {
+          const page = await pdfDoc.getPage(pNum);
+          if (myRenderId !== mobileRenderToken) return;
+          const vp = page.getViewport({ scale: fitScale * dpr });
+          const canvas = document.createElement('canvas');
+          canvas.width = vp.width;
+          canvas.height = vp.height;
+          canvas.style.width = `${Math.round(vp.width / dpr)}px`;
+          canvas.style.height = `${Math.round(vp.height / dpr)}px`;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          if (myRenderId !== mobileRenderToken) return;
+          cardEl.style.minHeight = '0';
+          cardEl.insertBefore(canvas, cardEl.firstChild);
+        } catch (_) {}
+      }
+
+      // İlk 3 sayfayı anında çiz, geri kalanını kaydırdıkça yüksek çözünürlükte çiz
+      for (let i = 0; i < Math.min(3, pageCards.length); i++) {
+        await renderSingleMobilePage(pageCards[i]);
+      }
+
+      if ('IntersectionObserver' in window) {
+        activeMobileObserver = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                renderSingleMobilePage(entry.target);
+              }
+            }
+          },
+          { root: container, rootMargin: '700px 0px' }
+        );
+        pageCards.forEach((c) => activeMobileObserver.observe(c));
+      } else {
+        for (let i = 3; i < pageCards.length; i++) {
+          await renderSingleMobilePage(pageCards[i]);
+        }
+      }
+    } catch (e) {
+      console.error('Mobil PDF önizleme hatası:', e);
+    }
+  }
+
   function updateUiWithConvertedPdf(pageCount, elapsedSec, modeLabel, isOriginal = false) {
     if (convertedPdfBlobUrl) {
       URL.revokeObjectURL(convertedPdfBlobUrl);
@@ -2246,10 +2597,21 @@
     convertedPdfBlobUrl = URL.createObjectURL(blob);
 
     const iframe = document.getElementById('pdfPreviewFrame');
+    const mobileViewer = document.getElementById('mobilePdfViewer');
     const emptyState = document.getElementById('emptyState');
     emptyState.style.display = 'none';
-    iframe.style.display = 'block';
-    iframe.src = convertedPdfBlobUrl;
+
+    const isMobileView = useMobileCanvasViewer();
+    if (isMobileView) {
+      iframe.style.display = 'none';
+      iframe.src = 'about:blank';
+      mobileViewer.style.display = 'flex';
+      renderMobilePdfPreview(convertedPdfBytes);
+    } else {
+      mobileViewer.style.display = 'none';
+      iframe.style.display = 'block';
+      iframe.src = convertedPdfBlobUrl;
+    }
 
     document.getElementById('downloadCleanPdfBtn').disabled = false;
     document.getElementById('downloadCleanPdfTopBtn').disabled = false;
@@ -2257,13 +2619,18 @@
 
     document.getElementById('answerCountBadge').textContent = extractedAnswers.length;
 
+    const mobileJumpHtml = isMobileView
+      ? `<div style="margin-top:8px;"><button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="scrollToPreviewOnMobile()">⬇️ PDF Test Görünümüne İn</button></div>`
+      : '';
+
     if (isOriginal) {
       document.getElementById('pageStatsLabel').textContent =
         `Orijinal Görünüm · ${extractedAnswers.length} Soru Cevabı Tespit Edildi`;
       setStatus(
         'info',
         `📄 <strong>PDF orijinal (varsayılan) haliyle açıldı.</strong><br/>` +
-        `Temizlemek istediğiniz özellikleri sol menüden seçebilirsiniz (veya <strong>"Tümünü Seç"</strong> butonuna tıklayabilirsiniz).`
+        `Temizlemek istediğiniz özellikleri menüden seçebilirsiniz (veya <strong>"Tümünü Seç"</strong> butonuna dokunabilirsiniz).` +
+        mobileJumpHtml
       );
     } else {
       document.getElementById('pageStatsLabel').textContent =
@@ -2272,7 +2639,8 @@
         'success',
         `✅ <strong>Dönüştürme Tamamlandı!</strong> (${elapsedSec} sn · ${modeLabel} · %100 Kalite)<br/>` +
         `• Seçtiğiniz temizleme ayarları <strong>${pageCount} sayfaya</strong> uygulandı.<br/>` +
-        `• <strong>${extractedAnswers.length} sorunun</strong> cevabı Cevap Anahtarına aktarıldı.`
+        `• <strong>${extractedAnswers.length} sorunun</strong> cevabı Cevap Anahtarına aktarıldı.` +
+        mobileJumpHtml
       );
     }
 
@@ -2291,7 +2659,7 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   function switchTab(tab) {
