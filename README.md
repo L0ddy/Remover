@@ -18,6 +18,5 @@
 ## 🚀 Kullanım
 
 Hiçbir kurulum veya sunucu gerektirmez:
-1. [`index.html`](index.html) dosyasını herhangi bir modern web tarayıcısında (Chrome, Edge, Brave, Safari, Firefox) çift tıklayarak açın.
-2. Sol panelden PDF dosyanızı sürükleyip bırakın.
-3. Sol menüden istediğiniz temizleme seçeneklerini işaretleyin ve **Temiz Test PDF'ini İndir (.pdf)** butonuna tıklayın.
+1. Sol panelden PDF dosyanızı sürükleyip bırakın.
+2. Sol menüden istediğiniz temizleme seçeneklerini işaretleyin ve **Temiz Test PDF'ini İndir (.pdf)** butonuna tıklayın.
