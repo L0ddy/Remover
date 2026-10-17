@@ -7,8 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <!-- Pako (Zlib/Flate sıkıştırma ve açma için) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-  <!-- PDF.js & jsPDF (Yalnızca taranmış/resim PDF'lerde yedek mod için) -->
+  <!-- PDF.js & jsPDF (Mobil önizleme ve taranmış/resim PDF'lerde yedek mod için) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root {
@@ -914,6 +915,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
       overflow: hidden;
     }
 
@@ -1333,9 +1335,46 @@
 
 <script>
   // PDF.js worker ayarı
+  const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
   if (window.pdfjsLib) {
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_CDN + 'pdf.worker.min.js';
+  }
+
+  // PDF.js belgesini mobil tarayıcılarda da güvenle aç:
+  // CMap + standart font verilerini verir, worker açılamazsa/takılırsa worker'sız tekrar dener.
+  async function loadPdfJsDocument(u8Bytes) {
+    const baseOpts = {
+      cMapUrl: PDFJS_CDN + 'cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: PDFJS_CDN + 'standard_fonts/',
+      isEvalSupported: false
+    };
+    const withTimeout = (promise, ms) =>
+      Promise.race([
+        promise,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('PDF.js zaman aşımı')), ms))
+      ]);
+    let task = null;
+    try {
+      task = window.pdfjsLib.getDocument({ ...baseOpts, data: u8Bytes.slice() });
+      return await withTimeout(task.promise, 20000);
+    } catch (err) {
+      console.warn('PDF.js worker ile açılamadı, worker olmadan deneniyor:', err);
+      try { if (task) task.destroy(); } catch (_) {}
+      if (!window.pdfjsWorker) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = PDFJS_CDN + 'pdf.worker.min.js';
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      // window.pdfjsWorker yüklüyken PDF.js işleri ana iş parçacığında (fake worker) yürütür
+      const mainThreadWorker = new window.pdfjsLib.PDFWorker();
+      const task2 = window.pdfjsLib.getDocument({ ...baseOpts, data: u8Bytes.slice(), worker: mainThreadWorker });
+      return await task2.promise;
+    }
   }
 
   // Global Durum
@@ -1694,6 +1733,111 @@
     return byteArray.map((b) => String.fromCharCode(cmap.get(b) ?? b)).join('');
   }
 
+  // Bir BT...ET bloğunun görünen metnini kaba olarak çözer.
+  // 1 baytlık dizgiler ASCII kabul edilir; 2 baytlık (Identity-H) kodlar standart TrueType
+  // glif sırasına göre (GID + 29 = ASCII) yaklaşık olarak çevrilir.
+  function readBtBlockText(btStr) {
+    const chars = [];
+    const re = /\(((?:[^()\\]|\\.)*)\)|<([0-9A-Fa-f\s]+)>/g;
+    let m;
+    while ((m = re.exec(btStr)) !== null) {
+      let codes = [];
+      let twoByte = false;
+      if (m[1] !== undefined) {
+        const bytes = parsePdfLiteralString(m[1]);
+        twoByte = bytes.length >= 2 && bytes.length % 2 === 0 && bytes.every((b, i) => i % 2 === 1 || b === 0);
+        if (twoByte) {
+          for (let i = 0; i < bytes.length; i += 2) codes.push(bytes[i + 1]);
+        } else {
+          codes = bytes;
+        }
+      } else {
+        const hex = m[2].replace(/\s+/g, '');
+        twoByte = hex.length >= 4 && hex.length % 4 === 0;
+        const step = twoByte ? 4 : 2;
+        for (let i = 0; i + step <= hex.length; i += step) codes.push(parseInt(hex.slice(i, i + step), 16));
+      }
+      for (const c of codes) {
+        if (twoByte) chars.push(c >= 3 && c < 0x62 ? String.fromCharCode(c + 29) : ' ');
+        else chars.push(c >= 32 && c < 127 ? String.fromCharCode(c) : ' ');
+      }
+    }
+    const text = chars.join('').replace(/\s+/g, ' ').trim();
+    const tm = btStr.match(/([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+Tm/);
+    return {
+      text,
+      x: tm ? parseFloat(tm[5]) : null,
+      y: tm ? parseFloat(tm[6]) : null
+    };
+  }
+
+  // Açık cevap satırlarını bulur:
+  //  - "Cevap D" / "Cevap: D" (2021-2025 sınavları)
+  //  - E) şıkkının hemen altındaki tek başına harf (2025-2026 sınavları)
+  // Dönüş: [{ letter, ranges: [[start, end], ...] }]
+  function findExplicitAnswerBlocks(streamStr) {
+    const blocks = [];
+    const btRe = /\bBT\b[\s\S]*?\bET\b/g;
+    let m;
+    while ((m = btRe.exec(streamStr)) !== null) {
+      const info = readBtBlockText(m[0]);
+      blocks.push({ start: m.index, end: m.index + m[0].length, ...info });
+    }
+
+    const results = [];
+    let eSeen = null;
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      if (!b.text) continue;
+
+      // 1) "Cevap" etiketi
+      const cm = b.text.match(/^Cevap\s*:?\s*([A-E])?\s*$/);
+      if (cm) {
+        if (cm[1]) {
+          results.push({ letter: cm[1], ranges: [[b.start, b.end]] });
+          eSeen = null;
+          continue;
+        }
+        for (let j = i + 1; j < Math.min(blocks.length, i + 6); j++) {
+          const nb = blocks[j];
+          if (!nb.text) continue;
+          const lm = nb.text.match(/^([A-E])$/);
+          if (lm) {
+            results.push({ letter: lm[1], ranges: [[b.start, b.end], [nb.start, nb.end]] });
+            i = j;
+            eSeen = null;
+          }
+          break;
+        }
+        continue;
+      }
+
+      // 2) E) şıkkı -> altındaki tek harf
+      if (/^E\s*[).]$/.test(b.text)) {
+        eSeen = { x: b.x, y: b.y };
+        continue;
+      }
+      if (eSeen) {
+        if (/^\d+\s*[).]$/.test(b.text) || /^[A-D]\s*[).]$/.test(b.text)) {
+          eSeen = null;
+          continue;
+        }
+        const lm = b.text.match(/^([A-E])$/);
+        if (lm && eSeen.y !== null && b.y !== null) {
+          const dy = eSeen.y - b.y;
+          const dx = eSeen.x !== null && b.x !== null ? Math.abs(b.x - eSeen.x) : 0;
+          if (dy >= 6 && dy <= 60 && dx <= 90) {
+            results.push({ letter: lm[1], ranges: [[b.start, b.end]] });
+            eSeen = null;
+          }
+        } else if (eSeen.y !== null && b.y !== null && eSeen.y - b.y > 60) {
+          eSeen = null;
+        }
+      }
+    }
+    return results;
+  }
+
   // ============================================================================
   // ANA DÖNÜŞTÜRME AKIŞI (VARSAYILAN ORİJİNAL BAŞLANGIÇ + VEKTÖREL MOTOR)
   // ============================================================================
@@ -1782,6 +1926,48 @@
         return streamBytes;
       }
     }
+
+    // 1B. PDF 1.5+ sıkıştırılmış nesne akışlarını (/Type /ObjStm) aç.
+    // Fontlar, /Widths, /ToUnicode ve hatta /Page nesneleri bu kapların içinde olabilir;
+    // açılmazsa yeniden inşa edilen PDF'te silinmiş sayılırlar ve tüm yazılar kaybolur!
+    const containerOids = new Set();
+    for (const [oid, body] of Array.from(objects.entries())) {
+      const sIdx = body.indexOf('stream');
+      if (sIdx === -1) continue;
+      const dict = body.slice(0, sIdx);
+      if (/\/Type\s*\/XRef\b/.test(dict)) {
+        containerOids.add(oid);
+        continue;
+      }
+      if (!/\/Type\s*\/ObjStm\b/.test(dict)) continue;
+      containerOids.add(oid);
+      const nMatch = dict.match(/\/N\s+(\d+)/);
+      const firstMatch = dict.match(/\/First\s+(\d+)/);
+      if (!nMatch || !firstMatch) continue;
+      const n = parseInt(nMatch[1], 10);
+      const first = parseInt(firstMatch[1], 10);
+      try {
+        const decBytes = await decodeObjectStream(oid);
+        if (!decBytes) continue;
+        const decStr = bytesToBinaryString(decBytes);
+        const nums = decStr.slice(0, first).trim().split(/\s+/).map((x) => parseInt(x, 10));
+        for (let k = 0; k < n; k++) {
+          const embOid = nums[2 * k];
+          const off = nums[2 * k + 1];
+          if (!Number.isFinite(embOid) || !Number.isFinite(off)) continue;
+          const nextOff = k + 1 < n ? nums[2 * (k + 1) + 1] : decStr.length - first;
+          const embBody = decStr.slice(first + off, first + nextOff).trim();
+          if (!objects.has(embOid)) {
+            objects.set(embOid, embBody);
+            if (embOid > maxOid) maxOid = embOid;
+          }
+        }
+      } catch (e) {
+        console.warn('ObjStm açılamadı:', oid, e);
+      }
+    }
+    // Kapları ve XRef akışlarını çıkar; içerikleri artık doğrudan klasik xref tablosunda yer alacak
+    for (const coid of containerOids) objects.delete(coid);
 
     // 2. Font nesnelerini ve /ToUnicode CMap tablolarını dinamik bul
     const fontCMaps = new Map();
@@ -1897,7 +2083,7 @@
     // ve sonraki tüm sorularda/şıklarda tekrar kullanılan sarı/renkli vurgu kutularını (re f*, f, B*)
     // tek bir tanesini bile kaçırmadan ve ASLA siyah kutuya çevirmeden %100 temizler!
     const masterHighlightRegex =
-      /(\((?:[^()\\]|\\.)*\)|<[0-9A-Fa-f\s]*>|\/[A-Za-z0-9_+#.-]+)|(\bq\b)|(\bQ\b)|(\bBT\b)|(\bET\b)|(?:(\/Cs\d+\s+cs\s+)?([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(rg|RG|scn?|SCN?)\b)|(?:([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(k|K)\b)|(?:([0-9.]+)\s+(g|G)\b)|((?:[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+re\s*)+(?:f\*|f\b|F\b|B\*|B\b))|(?<![0-9A-Za-z_\/.-])(f\*|f|F|B\*|B|S|s)(?![0-9A-Za-z_.-])/g;
+      /(\((?:[^()\\]|\\.)*\)|<[0-9A-Fa-f\s]*>|\/[A-Za-z0-9_+#.-]+)|(\bq\b)|(\bQ\b)|(\bBT\b)|(\bET\b)|(?:(\/Cs\d+\s+cs\s+)?([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(rg|RG|scn?|SCN?)\b)|(?:([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(k|K|scn?|SCN?)\b)|(?:([0-9.]+)\s+(g|G|scn?|SCN?)\b)|((?:[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+re\s*)+(?:f\*|f\b|F\b|B\*|B\b))|(?<![0-9A-Za-z_\/.-])(f\*|f|F|B\*|B|S|s)(?![0-9A-Za-z_.-])/g;
 
     function shouldCleanHighlightCategory(cat) {
       if (!cat) return false;
@@ -1999,18 +2185,20 @@
             const b = (1 - y) * (1 - k);
             const cat = classifyHighlightColor(r, g, b);
             const top = stateStack[stateStack.length - 1];
-            if (gCmykOp === 'K') top.stroke = cat;
+            const isStrokeCmyk = gCmykOp === 'K' || gCmykOp === 'SC' || gCmykOp === 'SCN';
+            if (isStrokeCmyk) top.stroke = cat;
             else top.fill = cat;
 
             if (!scanOnly && shouldCleanHighlightCategory(cat)) {
+              if (isStrokeCmyk) return inText ? `${pageLineRgb} RG` : `${pageBgRgb} RG`;
               return inText ? `${pageTextRgb} rg` : `${pageBgRgb} rg`;
             }
             return match;
           }
-          // 6) Gri Tonlama Operatörleri (g, G) -> aktif vurgu rengini sıfırlar
+          // 6) Gri Tonlama Operatörleri (g, G, tek bileşenli sc/scn) -> aktif vurgu rengini sıfırlar
           if (gGrayOp !== undefined) {
             const top = stateStack[stateStack.length - 1];
-            if (gGrayOp === 'g') top.fill = null;
+            if (gGrayOp === 'g' || gGrayOp === 'sc' || gGrayOp === 'scn') top.fill = null;
             else top.stroke = null;
             return match;
           }
@@ -2144,6 +2332,28 @@
                 page: pageIdx + 1,
                 optionText: fullTxt
               });
+            }
+          }
+        }
+
+        // A2) Açık cevap satırları ("Cevap D" veya E) şıkkı altındaki tek harf)
+        if (extractedAnswers.length === answersBeforePage) {
+          const explicitAnswers = findExplicitAnswerBlocks(decStr);
+          for (const ea of explicitAnswers) {
+            const qIdx = extractedAnswers.length + 1;
+            extractedAnswers.push({
+              id: `Soru_${qIdx}`,
+              subject: currentSubject !== 'Genel' ? currentSubject : 'Test Soruları',
+              qnum: qIdx,
+              answer: ea.letter,
+              page: pageIdx + 1,
+              optionText: `Cevap ${ea.letter}`
+            });
+          }
+          if (!scanOnly && optHideGreen && explicitAnswers.length > 0) {
+            const allRanges = explicitAnswers.flatMap((ea) => ea.ranges).sort((a, b) => b[0] - a[0]);
+            for (const [rs, re] of allRanges) {
+              decStr = decStr.slice(0, rs) + decStr.slice(re);
             }
           }
         }
@@ -2343,7 +2553,7 @@
       return;
     }
     const t0 = performance.now();
-    const pdfDoc = await window.pdfjsLib.getDocument({ data: originalPdfBytes.slice() }).promise;
+    const pdfDoc = await loadPdfJsDocument(originalPdfBytes);
     const numPages = pdfDoc.numPages;
 
     const optLightMode = document.getElementById('optLightMode').checked;
@@ -2507,7 +2717,7 @@
       '<div style="color:#e2e8f0; padding:24px; font-size:13px;">⏳ Sayfalar telefona uygun hazırlanıyor...</div>';
 
     try {
-      const pdfDoc = await window.pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
+      const pdfDoc = await loadPdfJsDocument(pdfBytes);
       if (myRenderId !== mobileRenderToken) return;
 
       const numPages = pdfDoc.numPages;
@@ -2586,6 +2796,12 @@
       }
     } catch (e) {
       console.error('Mobil PDF önizleme hatası:', e);
+      if (myRenderId === mobileRenderToken) {
+        container.innerHTML =
+          '<div style="color:#fecaca; padding:24px; font-size:13px; line-height:1.6;">' +
+          '⚠️ Önizleme bu tarayıcıda oluşturulamadı (' + (e && e.message ? e.message : 'bilinmeyen hata') + ').<br/>' +
+          'Temizlenmiş PDF yine de hazır: üstteki <strong>📥 İndir</strong> veya <strong>🔍 Tam Ekran</strong> butonunu kullanın.</div>';
+      }
     }
   }
 
