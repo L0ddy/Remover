@@ -1,0 +1,9 @@
+# Kişisel veya test amaçlı PDF dosyalarını GitHub'a yükleme
+*.pdf
+
+# İşletim sistemi ve editör geçici dosyaları
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

@@ -1,0 +1,2522 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Remover</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <!-- Pako (Zlib/Flate sıkıştırma ve açma için) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <!-- PDF.js & jsPDF (Yalnızca taranmış/resim PDF'lerde yedek mod için) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-soft: #eff6ff;
+      --success: #16a34a;
+      --success-soft: #f0fdf4;
+      --danger: #dc2626;
+      --danger-soft: #fef2f2;
+      --warning: #d97706;
+      --warning-soft: #fffbeb;
+      --radius: 12px;
+      --shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Üst Bar */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .brand-icon svg {
+      width: 40px;
+      height: 40px;
+      display: block;
+    }
+
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .brand-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Ana Düzen */
+    .workspace {
+      display: grid;
+      grid-template-columns: 370px 1fr;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Sol Kontrol Paneli */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    .card-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .quick-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .quick-link {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      background: var(--primary-soft);
+      border: 1px solid #bfdbfe;
+      padding: 3px 7px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .quick-link:hover {
+      background: #dbeafe;
+    }
+
+    /* Dosya Yükleme Alanı */
+    .dropzone {
+      border: 2px dashed #94a3b8;
+      border-radius: var(--radius);
+      padding: 20px 14px;
+      text-align: center;
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .dropzone-icon {
+      font-size: 26px;
+      margin-bottom: 6px;
+    }
+
+    .dropzone h3 {
+      font-size: 13.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .dropzone p {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Eklenen PDF Bilgisi + Sağdaki Silme Kutucuğu */
+    .file-badge {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: var(--primary-soft);
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .file-badge-info {
+      word-break: break-all;
+      line-height: 1.35;
+      flex: 1;
+    }
+
+    .file-delete-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      border: 1px solid #fca5a5;
+      background: var(--danger-soft);
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+
+    .file-delete-btn:hover {
+      background: var(--danger);
+      color: #ffffff;
+      border-color: var(--danger);
+    }
+
+    /* Ayar Seçenekleri */
+    .option-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .option-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1.35;
+      user-select: none;
+    }
+
+    .option-item input[type="checkbox"] {
+      margin-top: 2px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .option-label strong {
+      display: block;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .option-label span {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* 5 Renk Highlight Seçici */
+    .highlight-colors-box {
+      margin-top: 5px;
+      margin-left: 26px;
+      padding: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      opacity: 0.45;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+
+    .highlight-colors-box.enabled {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .highlight-colors-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .color-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .color-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+
+    .color-chip input {
+      display: none;
+    }
+
+    .color-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      flex-shrink: 0;
+    }
+
+    .color-chip.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .select-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 4px;
+    }
+
+    .select-row label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .select-row select {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12.5px;
+      color: var(--text);
+      outline: none;
+    }
+
+    /* Butonlar */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 9px;
+      font-size: 13.5px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      width: 100%;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(22, 163, 74, 0.2);
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: #15803d;
+    }
+
+    .btn-outline {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      background: var(--surface-alt);
+      border-color: #cbd5e1;
+    }
+
+    .btn-sm {
+      padding: 7px 12px;
+      font-size: 12.5px;
+      width: auto;
+    }
+
+    /* Durum Kutusu & İlerleme Çubuğu */
+    .status-box {
+      padding: 12px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      display: none;
+    }
+
+    .status-box.info {
+      display: block;
+      background: var(--primary-soft);
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
+
+    .status-box.success {
+      display: block;
+      background: var(--success-soft);
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .status-box.warning {
+      display: block;
+      background: var(--warning-soft);
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+
+    .progress-wrap {
+      margin-top: 8px;
+      width: 100%;
+      height: 7px;
+      background: rgba(37, 99, 235, 0.15);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.12s ease;
+    }
+
+    /* Sağ İçerik Alanı */
+    .main-area {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      background: var(--bg);
+    }
+
+    .tabs-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tab-btn {
+      padding: 12px 16px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.15s;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .badge-pill {
+      background: var(--primary-soft);
+      color: var(--primary);
+      padding: 2px 7px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* Çalışma Görünümü: PDF + Yan Optik Form */
+    .content-split {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      position: relative;
+    }
+
+    .tab-pane {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    /* PDF Görüntüleyici */
+    .pdf-viewer-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      height: 100%;
+      background: #525659;
+      position: relative;
+    }
+
+    .pdf-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: none;
+    }
+
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      max-width: 460px;
+      padding: 36px 24px;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      color: var(--text);
+    }
+
+    .empty-state-icon {
+      font-size: 46px;
+      margin-bottom: 12px;
+    }
+
+    .empty-state h2 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin-bottom: 16px;
+    }
+
+    .feature-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .feature-pill {
+      font-size: 11.5px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 99px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Yan Optik Form Çekmecesi */
+    .optical-drawer {
+      width: 370px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      flex-shrink: 0;
+    }
+
+    .optical-drawer.hidden {
+      display: none;
+    }
+
+    .optical-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--surface-alt);
+    }
+
+    .optical-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .optical-top-row h3 {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .optical-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .optical-controls select {
+      padding: 6px 8px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      background: var(--surface);
+    }
+
+    .score-banner {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      text-align: center;
+      background: var(--surface);
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .score-stat {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .score-stat strong {
+      display: block;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .optical-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .opt-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      font-size: 12.5px;
+    }
+
+    .opt-row.correct {
+      background: var(--success-soft);
+      border-color: #86efac;
+    }
+
+    .opt-row.wrong {
+      background: var(--danger-soft);
+      border-color: #fca5a5;
+    }
+
+    .opt-qinfo {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .opt-qnum {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .opt-qpage {
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .opt-bubbles {
+      display: flex;
+      gap: 5px;
+    }
+
+    .bubble {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1.5px solid #cbd5e1;
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+    }
+
+    .bubble:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .bubble.selected {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    .bubble.reveal-correct {
+      background: var(--success) !important;
+      border-color: var(--success) !important;
+      color: #fff !important;
+    }
+
+    .bubble.reveal-wrong {
+      background: var(--danger) !important;
+      border-color: var(--danger) !important;
+      color: #fff !important;
+    }
+
+    /* Cevap Anahtarı Sekmesi */
+    .answer-key-pane {
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 24px;
+      gap: 24px;
+    }
+
+    .ak-subject-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .ak-subject-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+    }
+
+    .ak-subject-header h3 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .ak-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+      gap: 8px;
+    }
+
+    .ak-cell {
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ak-cell .q {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .ak-cell .a {
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .warnings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .warning-item {
+      padding: 12px 14px;
+      background: var(--warning-soft);
+      border-left: 4px solid var(--warning);
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 960px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: 44vh;
+      }
+      .optical-drawer {
+        width: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon" title="Remover">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+          <defs>
+            <linearGradient id="hdrRedBgGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ef4444" />
+              <stop offset="100%" stop-color="#b91c1c" />
+            </linearGradient>
+          </defs>
+          <!-- Kırmızı Arka Plan -->
+          <rect x="0" y="0" width="64" height="64" rx="14" fill="url(#hdrRedBgGrad)" />
+          <!-- Tam Ortalanmış Beyaz Belge Gövdesi (x: 16..48, y: 12..54) -->
+          <rect x="16" y="12" width="32" height="42" rx="4.5" fill="#ffffff" />
+          <!-- Belge Üzerindeki Metin Satırları -->
+          <rect x="21" y="20" width="12" height="3" rx="1.5" fill="#dc2626" />
+          <rect x="21" y="27" width="22" height="2.8" rx="1.4" fill="#475569" />
+          <rect x="21" y="33.5" width="22" height="2.8" rx="1.4" fill="#64748b" />
+          <rect x="21" y="40" width="18" height="2.8" rx="1.4" fill="#94a3b8" />
+          <rect x="21" y="46.5" width="13" height="2.8" rx="1.4" fill="#cbd5e1" />
+          <!-- Dosyanın Sağ Üst Köşesinin Üstüne Gelen Yıldızlar -->
+          <path d="M46 5.5L48.2 11.8L54.5 14L48.2 16.2L46 22.5L43.8 16.2L37.5 14L43.8 11.8L46 5.5Z" fill="#facc15" stroke="#b91c1c" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M37.5 5L38.6 8.4L42 9.5L38.6 10.6L37.5 14L36.4 10.6L33 9.5L36.4 8.4L37.5 5Z" fill="#fef08a" stroke="#b91c1c" stroke-width="0.9" stroke-linejoin="round" />
+          <path d="M50.5 18.5L51.8 22.2L55.5 23.5L51.8 24.8L50.5 28.5L49.2 24.8L45.5 23.5L49.2 22.2L50.5 18.5Z" fill="#fde047" stroke="#b91c1c" stroke-width="1" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Remover</h1>
+        <p>Kalite kaybı olmadan kalın/renkli doğru şıkları ve vurguları temizler</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="toggleOpticalBtn" class="btn btn-outline btn-sm" onclick="toggleOpticalDrawer()">
+        📝 Yan Optik Formu Aç / Kapat
+      </button>
+      <button id="downloadCleanPdfTopBtn" class="btn btn-success btn-sm" disabled onclick="downloadCleanPdf()">
+        📥 Temiz Test PDF'ini İndir
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- SOL KONTROL PANELİ -->
+    <aside class="sidebar">
+      <div class="card">
+        <div class="card-title">1. PDF Dosyası Yükle</div>
+        <div id="dropzone" class="dropzone" onclick="document.getElementById('pdfInput').click()">
+          <div class="dropzone-icon">📄</div>
+          <h3>PDF Dosyasını Buraya Sürükleyin</h3>
+          <p>veya bilgisayarınızdan seçmek için tıklayın<br/>(Yüklendiğinde orijinal haliyle açılır)</p>
+          <input type="file" id="pdfInput" accept="application/pdf" style="display:none" onchange="handleFileSelect(event)" />
+        </div>
+        <div id="fileBadge" class="file-badge">
+          <span id="fileBadgeText" class="file-badge-info"></span>
+          <button type="button" class="file-delete-btn" onclick="removeLoadedPdf(event)" title="Eklenen PDF'i Sil">✕</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>2. Dönüştürme Ayarları</span>
+          <div class="quick-actions">
+            <button type="button" class="quick-link" onclick="setAllOptions(true)">Tümünü Seç</button>
+            <button type="button" class="quick-link" onclick="setAllOptions(false)">Sıfırla</button>
+          </div>
+        </div>
+        <div class="option-list">
+          <label class="option-item">
+            <input type="checkbox" id="optLightMode" onchange="reprocessIfLoaded()" />
+            <div class="option-label">
+              <strong>Koyu Arka Planı Kaldır (Açık Mod)</strong>
+              <span>Siyah zemini beyaz kağıda, kırık beyaz yazıları keskin siyah metne çevirir (Beyaz PDF'leri bozmaz).</span>
+            </div>
+          </label>
+
+          <label class="option-item">
+            <input type="checkbox" id="optHideGreen" onchange="reprocessIfLoaded()" />
+            <div class="option-label">
+              <strong>Doğru Cevapları Gizle (Yeşil & Kalın Sıfırla)</strong>
+              <span>Yeşil ve kalın (Bold) doğru şıkları diğer şıklarla birebir aynı normal (Regular) siyah yazı tipine dönüştürür.</span>
+            </div>
+          </label>
+
+          <div>
+            <label class="option-item">
+              <input type="checkbox" id="optRemoveFakeHighlights" onchange="toggleHighlightBox(); reprocessIfLoaded();" />
+              <div class="option-label">
+                <strong>Highlight Görünümlü Vurguları Sil</strong>
+                <span>PDF'te highlight olarak geçmeyen ancak şerit, kutu veya renkli metin olarak vurgulanmış yerleri vektörel olarak siler.</span>
+              </div>
+            </label>
+            <div id="highlightColorsBox" class="highlight-colors-box">
+              <div class="highlight-colors-title">Temizlenecek Vurgu Renkleri:</div>
+              <div class="color-chips">
+                <label class="color-chip active" id="chip-yellow">
+                  <input type="checkbox" value="yellow" checked onchange="updateColorChip(this)" />
+                  <span class="color-dot" style="background:#facc15;"></span>
+                  Sarı
+                </label>
+                <label class="color-chip active" id="chip-green">
+                  <input type="checkbox" value="green" checked onchange="updateColorChip(this)" />
+                  <span class="color-dot" style="background:#22c55e;"></span>
+                  Yeşil
+                </label>
+                <label class="color-chip active" id="chip-blue">
+                  <input type="checkbox" value="blue" checked onchange="updateColorChip(this)" />
+                  <span class="color-dot" style="background:#38bdf8;"></span>
+                  Mavi
+                </label>
+                <label class="color-chip active" id="chip-pink">
+                  <input type="checkbox" value="pink" checked onchange="updateColorChip(this)" />
+                  <span class="color-dot" style="background:#f472b6;"></span>
+                  Pembe
+                </label>
+                <label class="color-chip active" id="chip-orange">
+                  <input type="checkbox" value="orange" checked onchange="updateColorChip(this)" />
+                  <span class="color-dot" style="background:#fb923c;"></span>
+                  Turuncu
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <label class="option-item">
+            <input type="checkbox" id="optHideSpoilers" onchange="reprocessIfLoaded()" />
+            <div class="option-label">
+              <strong>Kırmızı "!" İpucu Kutularını Gizle</strong>
+              <span>Sorunun altında doğru şıkkı açıkça söyleyen açıklama kutularını testten kaldırır.</span>
+            </div>
+          </label>
+
+          <label class="option-item">
+            <input type="checkbox" id="optCleanWatermark" onchange="reprocessIfLoaded()" />
+            <div class="option-label">
+              <strong>Üst Bilgileri Gizle</strong>
+              <span>Sayfa üst/alt bilgilerini ve filigran yazılarını gizler.</span>
+            </div>
+          </label>
+
+          <div class="select-row">
+            <label for="paperTone">Kağıt Zemin Rengi:</label>
+            <select id="paperTone" onchange="reprocessIfLoaded()">
+              <option value="white">Saf Beyaz (#FFFFFF — Yazıcı / Baskı İçin İdeal)</option>
+              <option value="cream">Krem Kitap Kağıdı (#FAF7F0 — Göz Yormayan Ekran)</option>
+            </select>
+          </div>
+
+          <div class="select-row">
+            <label for="engineMode">Dönüştürme Motoru:</label>
+            <select id="engineMode" onchange="reprocessIfLoaded()">
+              <option value="vector">Vektörel Akıllı Motor (Önerilen — %100 Orijinal Kalite & Anında Dönüşüm)</option>
+              <option value="canvas">Görüntü / Piksel Tabanlı Motor (Yalnızca Taranmış Resim PDF'ler İçin)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="statusBox" class="status-box"></div>
+
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:auto;">
+        <button id="downloadCleanPdfBtn" class="btn btn-success" disabled onclick="downloadCleanPdf()">
+          📥 Temiz Test PDF'ini İndir (.pdf)
+        </button>
+        <button id="printAnswerKeyBtn" class="btn btn-outline" disabled onclick="printAnswerKey()">
+          🖨️ Cevap Anahtarını Yazdır / PDF Kaydet
+        </button>
+      </div>
+    </aside>
+
+    <!-- SAĞ ÇALIŞMA ALANI -->
+    <main class="main-area">
+      <div class="tabs-bar">
+        <div class="tabs">
+          <button class="tab-btn active" id="tabBtnPreview" onclick="switchTab('preview')">
+            📄 PDF Test Görünümü
+          </button>
+          <button class="tab-btn" id="tabBtnAnswerKey" onclick="switchTab('answerkey')">
+            🔑 Çıkarılan Cevap Anahtarı
+            <span id="answerCountBadge" class="badge-pill">0</span>
+          </button>
+        </div>
+        <div style="font-size:12px; color:var(--text-muted);" id="pageStatsLabel">
+          Henüz PDF yüklenmedi
+        </div>
+      </div>
+
+      <div class="content-split">
+        <!-- SEKME 1: PDF ÖNİZLEME VE YAN OPTİK FORM -->
+        <div id="panePreview" class="tab-pane active">
+          <div class="pdf-viewer-container">
+            <div id="emptyState" class="empty-state">
+              <div class="empty-state-icon">✨</div>
+              <h2>PDF Testiniz Orijinal Kalitesinde Hazır</h2>
+              <p>
+                Sol taraftan PDF dosyanızı seçin veya sürükleyin.
+                PDF ilk yüklendiğinde <strong>orijinal (varsayılan) haliyle</strong> açılır; ardından soldan istediğiniz temizleme seçeneklerini işaretleyebilirsiniz.
+              </p>
+              <div class="feature-pills">
+                <span class="feature-pill">📄 Varsayılan Orijinal Başlangıç</span>
+                <span class="feature-pill">🧹 Bold & Yeşil Şık Sıfırlama</span>
+                <span class="feature-pill">🎨 5 Renk Vektörel Vurgu Silme</span>
+                <span class="feature-pill">📐 Sıfır Kalite Kaybı</span>
+              </div>
+            </div>
+            <iframe id="pdfPreviewFrame" class="pdf-iframe" title="Temiz PDF Önizleme"></iframe>
+          </div>
+
+          <!-- YAN OPTİK FORM -->
+          <div id="opticalDrawer" class="optical-drawer hidden">
+            <div class="optical-header">
+              <div class="optical-top-row">
+                <h3>📝 İnteraktif Optik Form</h3>
+                <button class="btn btn-outline btn-sm" style="padding:4px 8px; font-size:11px;" onclick="resetOpticalMarks()">Sıfırla</button>
+              </div>
+              <div class="optical-controls">
+                <select id="optSubjectFilter" onchange="renderOpticalList()">
+                  <option value="ALL">Tüm Dersler</option>
+                </select>
+                <select id="optCheckMode" onchange="renderOpticalList()">
+                  <option value="instant">Anında Kontrol Et</option>
+                  <option value="exam">Sınav Modu (Gizle)</option>
+                </select>
+              </div>
+              <button id="revealExamBtn" class="btn btn-primary btn-sm" style="display:none; width:100%;" onclick="toggleExamReveal()">
+                ✅ Cevapları Kontrol Et / Göster
+              </button>
+              <div class="score-banner">
+                <div class="score-stat"><strong id="statTotal">0</strong>Toplam</div>
+                <div class="score-stat"><strong id="statCorrect" style="color:var(--success)">0</strong>Doğru</div>
+                <div class="score-stat"><strong id="statWrong" style="color:var(--danger)">0</strong>Yanlış</div>
+                <div class="score-stat"><strong id="statEmpty">0</strong>Boş</div>
+              </div>
+            </div>
+            <div id="opticalList" class="optical-list"></div>
+          </div>
+        </div>
+
+        <!-- SEKME 2: ÇIKARILAN CEVAP ANAHTARI -->
+        <div id="paneAnswerKey" class="tab-pane answer-key-pane">
+          <div id="answerKeyContainer">
+            <div class="empty-state">
+              <div class="empty-state-icon">🔑</div>
+              <h2>Cevap Anahtarı Henüz Oluşturulmadı</h2>
+              <p>Bir PDF yüklediğinizde, doğru şıklar gizlenmeden önce tüm soruların cevap anahtarı otomatik olarak buraya çıkarılır.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+  // PDF.js worker ayarı
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // Global Durum
+  let originalPdfBytes = null;
+  let originalFileName = 'Cikmis_Sorular';
+  let convertedPdfBlobUrl = null;
+  let convertedPdfBytes = null;
+  let extractedAnswers = []; // { id, subject, qnum, answer, page, optionText }
+  let extractedWarnings = []; // { page, subject, qnum, text }
+  let userMarks = {}; // id -> 'A'|'B'|'C'|'D'|'E'
+  let examRevealed = false;
+  let processingToken = 0;
+
+  // Sürükle-Bırak Olayları
+  const dropzone = document.getElementById('dropzone');
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+  });
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+  });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      loadPdfFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  function handleFileSelect(e) {
+    if (e.target.files && e.target.files.length > 0) {
+      loadPdfFile(e.target.files[0]);
+    }
+  }
+
+  async function loadPdfFile(file) {
+    originalFileName = file.name.replace(/\.pdf$/i, '');
+    const badge = document.getElementById('fileBadge');
+    const badgeText = document.getElementById('fileBadgeText');
+    badge.style.display = 'flex';
+    badgeText.textContent = `📎 ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+
+    const buf = await file.arrayBuffer();
+    originalPdfBytes = new Uint8Array(buf);
+    userMarks = {};
+    examRevealed = false;
+    await processLoadedPdf();
+  }
+
+  // Eklenen PDF'i Silme Fonksiyonu
+  function removeLoadedPdf(e) {
+    if (e) e.stopPropagation();
+    processingToken++;
+    originalPdfBytes = null;
+    convertedPdfBytes = null;
+    extractedAnswers = [];
+    extractedWarnings = [];
+    userMarks = {};
+    examRevealed = false;
+
+    if (convertedPdfBlobUrl) {
+      URL.revokeObjectURL(convertedPdfBlobUrl);
+      convertedPdfBlobUrl = null;
+    }
+
+    document.getElementById('pdfInput').value = '';
+    document.getElementById('fileBadge').style.display = 'none';
+    document.getElementById('fileBadgeText').textContent = '';
+
+    const iframe = document.getElementById('pdfPreviewFrame');
+    iframe.src = 'about:blank';
+    iframe.style.display = 'none';
+    document.getElementById('emptyState').style.display = 'block';
+
+    document.getElementById('downloadCleanPdfBtn').disabled = true;
+    document.getElementById('downloadCleanPdfTopBtn').disabled = true;
+    document.getElementById('printAnswerKeyBtn').disabled = true;
+
+    document.getElementById('answerCountBadge').textContent = '0';
+    document.getElementById('pageStatsLabel').textContent = 'Henüz PDF yüklenmedi';
+    document.getElementById('statusBox').className = 'status-box';
+    document.getElementById('statusBox').innerHTML = '';
+
+    document.getElementById('opticalList').innerHTML = '';
+    document.getElementById('statTotal').textContent = '0';
+    document.getElementById('statCorrect').textContent = '0';
+    document.getElementById('statWrong').textContent = '0';
+    document.getElementById('statEmpty').textContent = '0';
+
+    document.getElementById('answerKeyContainer').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🔑</div>
+        <h2>Cevap Anahtarı Henüz Oluşturulmadı</h2>
+        <p>Bir PDF yüklediğinizde, doğru şıklar gizlenmeden önce tüm soruların cevap anahtarı otomatik olarak buraya çıkarılır.</p>
+      </div>
+    `;
+  }
+
+  function setAllOptions(state) {
+    document.getElementById('optLightMode').checked = state;
+    document.getElementById('optHideGreen').checked = state;
+    document.getElementById('optRemoveFakeHighlights').checked = state;
+    document.getElementById('optHideSpoilers').checked = state;
+    document.getElementById('optCleanWatermark').checked = state;
+    toggleHighlightBox();
+    reprocessIfLoaded();
+  }
+
+  function toggleHighlightBox() {
+    const enabled = document.getElementById('optRemoveFakeHighlights').checked;
+    const box = document.getElementById('highlightColorsBox');
+    box.classList.toggle('enabled', enabled);
+  }
+
+  function updateColorChip(checkbox) {
+    const label = checkbox.closest('.color-chip');
+    if (label) {
+      label.classList.toggle('active', checkbox.checked);
+    }
+    reprocessIfLoaded();
+  }
+
+  function getSelectedHighlightColors() {
+    const enabled = document.getElementById('optRemoveFakeHighlights').checked;
+    if (!enabled) return new Set();
+    const checked = document.querySelectorAll('#highlightColorsBox input[type="checkbox"]:checked');
+    return new Set(Array.from(checked).map((cb) => cb.value));
+  }
+
+  function isAnyOptionEnabled() {
+    return (
+      document.getElementById('optLightMode').checked ||
+      document.getElementById('optHideGreen').checked ||
+      document.getElementById('optRemoveFakeHighlights').checked ||
+      document.getElementById('optHideSpoilers').checked ||
+      document.getElementById('optCleanWatermark').checked
+    );
+  }
+
+  // RGB (0..1) rengini 5 temel vurgu renginden birine sınıflandırır:
+  // 'yellow' | 'green' | 'blue' | 'pink' | 'orange' | null
+  function classifyHighlightColor(r, g, b) {
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    // Gri tonlamalı (siyah, beyaz, gri, krem kağıt) renkleri atla
+    if (delta < 0.08 || max < 0.22) return null;
+
+    let h = 0;
+    if (max === r) {
+      h = ((g - b) / delta) % 6;
+    } else if (max === g) {
+      h = (b - r) / delta + 2;
+    } else {
+      h = (r - g) / delta + 4;
+    }
+    h = h * 60;
+    if (h < 0) h += 360;
+
+    if (h >= 15 && h < 45) return 'orange';
+    if (h >= 45 && h < 75) return 'yellow';
+    if (h >= 75 && h < 168) return 'green';
+    if (h >= 168 && h < 265) return 'blue';
+    if (h >= 265 || h < 15) return 'pink';
+    return null;
+  }
+
+  async function reprocessIfLoaded() {
+    if (!originalPdfBytes) return;
+    await processLoadedPdf();
+  }
+
+  function setStatus(type, html) {
+    const box = document.getElementById('statusBox');
+    box.className = `status-box ${type}`;
+    box.innerHTML = html;
+  }
+
+  // Tarayıcı arayüzünün donmaması için kısa bekleme
+  function yieldToUi() {
+    return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  }
+
+  // ============================================================================
+  // YARDIMCI İKİLİ (BINARY) VE SIKIŞTIRMA FONKSİYONLARI
+  // ============================================================================
+  function bytesToBinaryString(u8) {
+    const CHUNK = 0x8000;
+    const parts = [];
+    for (let i = 0; i < u8.length; i += CHUNK) {
+      parts.push(String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK)));
+    }
+    return parts.join('');
+  }
+
+  function binaryStringToBytes(str) {
+    const u8 = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+      u8[i] = str.charCodeAt(i) & 0xff;
+    }
+    return u8;
+  }
+
+  function ascii85Decode(rawBytes) {
+    const out = [];
+    const group = [];
+    const n = rawBytes.length;
+    let i = 0;
+    while (i < n) {
+      const b = rawBytes[i];
+      if (b === 126 && i + 1 < n && rawBytes[i + 1] === 62) { // ~>
+        break;
+      }
+      if (b <= 32) {
+        i++;
+        continue;
+      }
+      if (b === 122) { // 'z' -> 4 sıfır bayt
+        out.push(0, 0, 0, 0);
+        i++;
+        continue;
+      }
+      if (b >= 33 && b <= 117) {
+        group.push(b - 33);
+        if (group.length === 5) {
+          const val =
+            group[0] * 52200625 +
+            group[1] * 614125 +
+            group[2] * 7225 +
+            group[3] * 85 +
+            group[4];
+          out.push(
+            Math.floor(val / 16777216) & 0xff,
+            Math.floor(val / 65536) & 0xff,
+            Math.floor(val / 256) & 0xff,
+            val & 0xff
+          );
+          group.length = 0;
+        }
+      }
+      i++;
+    }
+    if (group.length >= 2) {
+      const k = group.length;
+      while (group.length < 5) group.push(84);
+      const val =
+        group[0] * 52200625 +
+        group[1] * 614125 +
+        group[2] * 7225 +
+        group[3] * 85 +
+        group[4];
+      const full = [
+        Math.floor(val / 16777216) & 0xff,
+        Math.floor(val / 65536) & 0xff,
+        Math.floor(val / 256) & 0xff,
+        val & 0xff
+      ];
+      for (let j = 0; j < k - 1; j++) out.push(full[j]);
+    }
+    return new Uint8Array(out);
+  }
+
+  async function flateDecompress(u8) {
+    if (window.pako) {
+      return window.pako.inflate(u8);
+    }
+    const ds = new DecompressionStream('deflate');
+    const writer = ds.writable.getWriter();
+    writer.write(u8);
+    writer.close();
+    return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  }
+
+  async function flateCompress(u8) {
+    if (window.pako) {
+      return window.pako.deflate(u8);
+    }
+    const cs = new CompressionStream('deflate');
+    const writer = cs.writable.getWriter();
+    writer.write(u8);
+    writer.close();
+    return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  }
+
+  // PDF Literal String (...) ayrıştırıcı ve kodlayıcı
+  function parsePdfLiteralString(strContent) {
+    const out = [];
+    const n = strContent.length;
+    let i = 0;
+    while (i < n) {
+      const ch = strContent.charCodeAt(i) & 0xff;
+      if (ch === 92) {
+        i++;
+        if (i >= n) break;
+        const esc = strContent.charCodeAt(i) & 0xff;
+        if (esc === 110) { out.push(10); i++; }
+        else if (esc === 114) { out.push(13); i++; }
+        else if (esc === 116) { out.push(9); i++; }
+        else if (esc === 98) { out.push(8); i++; }
+        else if (esc === 102) { out.push(12); i++; }
+        else if (esc === 40) { out.push(40); i++; }
+        else if (esc === 41) { out.push(41); i++; }
+        else if (esc === 92) { out.push(92); i++; }
+        else if (esc >= 48 && esc <= 55) {
+          let oct = String.fromCharCode(esc);
+          i++;
+          for (let k = 0; k < 2; k++) {
+            if (i < n) {
+              const c2 = strContent.charCodeAt(i) & 0xff;
+              if (c2 >= 48 && c2 <= 55) {
+                oct += String.fromCharCode(c2);
+                i++;
+              } else break;
+            }
+          }
+          out.push(parseInt(oct, 8) & 0xff);
+        } else if (esc === 10 || esc === 13) {
+          i++;
+          if (esc === 13 && i < n && strContent.charCodeAt(i) === 10) i++;
+        } else {
+          out.push(esc);
+          i++;
+        }
+      } else {
+        out.push(ch);
+        i++;
+      }
+    }
+    return out;
+  }
+
+  function encodePdfLiteralString(byteArray) {
+    let s = '(';
+    for (let i = 0; i < byteArray.length; i++) {
+      const b = byteArray[i] & 0xff;
+      if (b === 40) s += '\\(';
+      else if (b === 41) s += '\\)';
+      else if (b === 92) s += '\\\\';
+      else if (b >= 32 && b <= 126) s += String.fromCharCode(b);
+      else s += '\\' + b.toString(8).padStart(3, '0');
+    }
+    s += ')';
+    return s;
+  }
+
+  function decodeBytesWithCMap(byteArray, cmap) {
+    if (!cmap) {
+      return byteArray.map((b) => String.fromCharCode(b)).join('');
+    }
+    return byteArray.map((b) => String.fromCharCode(cmap.get(b) ?? b)).join('');
+  }
+
+  // ============================================================================
+  // ANA DÖNÜŞTÜRME AKIŞI (VARSAYILAN ORİJİNAL BAŞLANGIÇ + VEKTÖREL MOTOR)
+  // ============================================================================
+  async function processLoadedPdf() {
+    const myToken = ++processingToken;
+
+    // Hiçbir özellik seçili değilse PDF'i hiç değiştirmeden %100 orijinal haliyle göster!
+    if (!isAnyOptionEnabled()) {
+      convertedPdfBytes = originalPdfBytes;
+      // Arka planda yine de cevap anahtarını sessizce tarayalım
+      try {
+        await processPdfViaVectorStreams(myToken, true);
+      } catch (_) {}
+      if (myToken !== processingToken) return;
+      convertedPdfBytes = originalPdfBytes;
+      updateUiWithConvertedPdf(null, '0.00', 'Orijinal Görünüm', true);
+      return;
+    }
+
+    const mode = document.getElementById('engineMode').value;
+    try {
+      if (mode === 'canvas') {
+        await processPdfViaCanvas(myToken);
+      } else {
+        const ok = await processPdfViaVectorStreams(myToken, false);
+        if (!ok && myToken === processingToken) {
+          setStatus('warning', '⚠️ Bu PDF standart vektörel akış yapısında değil, Görüntü Tabanlı Mod ile dönüştürülüyor...');
+          await processPdfViaCanvas(myToken);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      if (myToken !== processingToken) return;
+      setStatus('warning', '⚠️ Vektörel ayrıştırma sırasında hata oluştu (' + err.message + '). Görüntü Tabanlı Mod deneniyor...');
+      await processPdfViaCanvas(myToken);
+    }
+  }
+
+  async function processPdfViaVectorStreams(myToken, scanOnly = false) {
+    const t0 = performance.now();
+    const rawStr = bytesToBinaryString(originalPdfBytes);
+
+    // 1. Tüm PDF nesnelerini (1..N) esnek regex ile ayrıştır
+    const objRegex = /(\d+)\s+0\s+obj[\r\n\s]*([\s\S]*?)[\r\n\s]*endobj/g;
+    const objects = new Map();
+    let maxOid = 0;
+    let m;
+    while ((m = objRegex.exec(rawStr)) !== null) {
+      const oid = parseInt(m[1], 10);
+      objects.set(oid, m[2]);
+      if (oid > maxOid) maxOid = oid;
+    }
+    if (objects.size === 0) return false;
+
+    // Yardımcı: bir stream nesnesini ikili (binary) veriyi bozmadan aç
+    async function decodeObjectStream(oid) {
+      const body = objects.get(oid);
+      if (!body) return null;
+      const sIdx = body.indexOf('stream');
+      if (sIdx === -1) return null;
+      const nlIdx = body.indexOf('\n', sIdx);
+      if (nlIdx === -1) return null;
+      const sStart = nlIdx + 1;
+      const sEnd = body.lastIndexOf('endstream');
+      if (sEnd === -1) return null;
+      const hdr = body.slice(0, sIdx);
+      let rawStreamStr = body.slice(sStart, sEnd);
+      if (rawStreamStr.endsWith('\r\n')) {
+        rawStreamStr = rawStreamStr.slice(0, -2);
+      } else if (rawStreamStr.endsWith('\n') || rawStreamStr.endsWith('\r')) {
+        rawStreamStr = rawStreamStr.slice(0, -1);
+      }
+
+      if (hdr.includes('/ASCII85Decode') || rawStreamStr.trimEnd().endsWith('~>')) {
+        let streamBytes = binaryStringToBytes(rawStreamStr.trim());
+        streamBytes = ascii85Decode(streamBytes);
+        if (hdr.includes('/FlateDecode')) {
+          streamBytes = await flateDecompress(streamBytes);
+        }
+        return streamBytes;
+      } else {
+        let streamBytes = binaryStringToBytes(rawStreamStr);
+        if (hdr.includes('/FlateDecode')) {
+          streamBytes = await flateDecompress(streamBytes);
+        }
+        return streamBytes;
+      }
+    }
+
+    // 2. Font nesnelerini ve /ToUnicode CMap tablolarını dinamik bul
+    const fontCMaps = new Map();
+    for (const [oid, body] of objects.entries()) {
+      if (/\/Type\s*\/Font\b/.test(body) && body.includes('/ToUnicode')) {
+        const nameMatch = body.match(/\/Name\s+(\/\S+)/);
+        const baseMatch = body.match(/\/BaseFont\s+\/(\S+)/);
+        const uniMatch = body.match(/\/ToUnicode\s+(\d+)\s+0\s+R/);
+        if (uniMatch) {
+          const fontName = nameMatch ? nameMatch[1] : `/FontObj${oid}`;
+          const baseName = baseMatch ? baseMatch[1] : '';
+          const uniOid = parseInt(uniMatch[1], 10);
+          try {
+            const cmapBytes = await decodeObjectStream(uniOid);
+            if (cmapBytes) {
+              const cmapText = bytesToBinaryString(cmapBytes);
+              const cmap = new Map();
+              const revMap = new Map();
+              const bfRegex = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+              let cm;
+              while ((cm = bfRegex.exec(cmapText)) !== null) {
+                const code = parseInt(cm[1], 16);
+                const uni = parseInt(cm[2], 16);
+                cmap.set(code, uni);
+                revMap.set(uni, code);
+              }
+              fontCMaps.set(fontName, {
+                fontName,
+                baseName,
+                isBold: /Bold/i.test(baseName),
+                isOblique: /Oblique|Italic/i.test(baseName),
+                cmap,
+                revMap
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    let regularFont = null;
+    let boldFont = null;
+    for (const f of fontCMaps.values()) {
+      if (!f.isBold && !f.isOblique && f.fontName.startsWith('/F') && !regularFont) regularFont = f;
+      if (f.isBold && !f.isOblique && f.fontName.startsWith('/F') && !boldFont) boldFont = f;
+    }
+
+    function convertBoldToRegularInBt(btContent) {
+      if (!boldFont || !regularFont) return btContent;
+      if (!btContent.includes(boldFont.fontName)) return btContent;
+      let res = btContent.replace(/-[0-9.]+\s+Tw\s*/g, '');
+      res = res.split(boldFont.fontName).join(regularFont.fontName);
+      res = res.replace(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g, (mStr, rawContent) => {
+        const bList = parsePdfLiteralString(rawContent);
+        const mapped = bList.map((b) => {
+          const u = boldFont.cmap.get(b);
+          if (u !== undefined && regularFont.revMap.has(u)) {
+            return regularFont.revMap.get(u);
+          }
+          return b;
+        });
+        return encodePdfLiteralString(mapped) + ' Tj';
+      });
+      return res;
+    }
+
+    // 3. Sayfa sırasına göre /Contents nesnelerini (tekil veya dizi) ve Form XObject akışlarını bul
+    const selectedHighlightColors = getSelectedHighlightColors();
+    const pageContentGroups = []; // Her sayfa için [cid1, cid2, ...]
+    const formStreamOids = new Set();
+
+    for (const [oid, body] of objects.entries()) {
+      if (/\/Type\s*\/Page\b/.test(body) && !/\/Type\s*\/Pages\b/.test(body)) {
+        const cidsForPage = [];
+        const arrMatch = body.match(/\/Contents\s*\[([\s\S]*?)\]/);
+        if (arrMatch) {
+          const refRegex = /(\d+)\s+0\s+R/g;
+          let rm;
+          while ((rm = refRegex.exec(arrMatch[1])) !== null) {
+            cidsForPage.push(parseInt(rm[1], 10));
+          }
+        } else {
+          const singleMatch = body.match(/\/Contents\s+(\d+)\s+0\s+R/);
+          if (singleMatch) cidsForPage.push(parseInt(singleMatch[1], 10));
+        }
+        if (cidsForPage.length > 0) {
+          pageContentGroups.push(cidsForPage);
+        }
+        // Highlight silme açıksa hem satır içi [ ... ] hem de dolaylı (N 0 R) /Annots referanslarını kaldır
+        if (!scanOnly && selectedHighlightColors.size > 0 && body.includes('/Annots')) {
+          objects.set(oid, body.replace(/\/Annots\s*(?:\[[\s\S]*?\]|\d+\s+0\s+R)/g, ''));
+        }
+      } else if (/\/Subtype\s*\/Form\b/.test(body) && body.includes('stream')) {
+        formStreamOids.add(oid);
+      }
+    }
+    if (pageContentGroups.length === 0) return false;
+
+    const optLightMode = document.getElementById('optLightMode').checked;
+    const optHideGreen = document.getElementById('optHideGreen').checked;
+    const optHideSpoilers = document.getElementById('optHideSpoilers').checked;
+    const optCleanWatermark = document.getElementById('optCleanWatermark').checked;
+    const paperTone = document.getElementById('paperTone').value;
+    const bgRgb = paperTone === 'cream' ? '.980 .969 .941' : '1 1 1';
+
+    extractedAnswers = [];
+    extractedWarnings = [];
+    let currentSubject = 'Genel';
+    let currentQnum = 0;
+
+    // Yardımcı: Durumlu (Stateful q/Q ve BT/ET) Vektörel Vurgu & Renk Temizleyici
+    // PDF grafik durumu yığınını (q/Q) takip eder; dış katmanda tanımlanan (1 1 0 rg vb.)
+    // ve sonraki tüm sorularda/şıklarda tekrar kullanılan sarı/renkli vurgu kutularını (re f*, f, B*)
+    // tek bir tanesini bile kaçırmadan ve ASLA siyah kutuya çevirmeden %100 temizler!
+    const masterHighlightRegex =
+      /(\((?:[^()\\]|\\.)*\)|<[0-9A-Fa-f\s]*>|\/[A-Za-z0-9_+#.-]+)|(\bq\b)|(\bQ\b)|(\bBT\b)|(\bET\b)|(?:(\/Cs\d+\s+cs\s+)?([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(rg|RG|scn?|SCN?)\b)|(?:([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(k|K)\b)|(?:([0-9.]+)\s+(g|G)\b)|((?:[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+re\s*)+(?:f\*|f\b|F\b|B\*|B\b))|(?<![0-9A-Za-z_\/.-])(f\*|f|F|B\*|B|S|s)(?![0-9A-Za-z_.-])/g;
+
+    function shouldCleanHighlightCategory(cat) {
+      if (!cat) return false;
+      if (selectedHighlightColors.has(cat)) return true;
+      if (optHideGreen && cat === 'green') return true;
+      return false;
+    }
+
+    function runStatefulHighlightCleaner(streamStr, pageNumber, pageTextRgb, pageLineRgb, pageBgRgb, collectAnswers) {
+      const stateStack = [{ fill: null, stroke: null }];
+      let inText = false;
+
+      return streamStr.replace(
+        masterHighlightRegex,
+        (
+          match,
+          gStrOrName,
+          gPush,
+          gPop,
+          gBt,
+          gEt,
+          gCsPrefix,
+          gR,
+          gG,
+          gB,
+          gRgbOp,
+          gC,
+          gM,
+          gY,
+          gK,
+          gCmykOp,
+          gGrayVal,
+          gGrayOp,
+          gRectFill,
+          gPathOp,
+          offset,
+          fullStr
+        ) => {
+          // 1) PDF metin dizgileri (...) / <...> ve /İsimler içindeki karakterlere asla dokunma
+          if (gStrOrName !== undefined) {
+            return match;
+          }
+          // 2) Grafik durumu yığını (q / Q)
+          if (gPush !== undefined) {
+            stateStack.push({ ...stateStack[stateStack.length - 1] });
+            return match;
+          }
+          if (gPop !== undefined) {
+            if (stateStack.length > 1) stateStack.pop();
+            return match;
+          }
+          // 3) Metin bloğu başlangıcı ve bitişi (BT / ET)
+          if (gBt !== undefined) {
+            inText = true;
+            const activeFill = stateStack[stateStack.length - 1].fill;
+            if (!scanOnly && shouldCleanHighlightCategory(activeFill)) {
+              return `BT\n${pageTextRgb} rg`;
+            }
+            return match;
+          }
+          if (gEt !== undefined) {
+            inText = false;
+            return match;
+          }
+          // 4) RGB Renk Operatörleri (rg, RG, sc, SC, scn, SCN)
+          if (gRgbOp !== undefined) {
+            const csPrefix = gCsPrefix || '';
+            const r = parseFloat(gR);
+            const g = parseFloat(gG);
+            const b = parseFloat(gB);
+            const cat = classifyHighlightColor(r, g, b);
+            const isStroke = gRgbOp === 'RG' || gRgbOp === 'SC' || gRgbOp === 'SCN';
+            const top = stateStack[stateStack.length - 1];
+
+            if (isStroke) {
+              top.stroke = cat;
+              if (!scanOnly && shouldCleanHighlightCategory(cat)) {
+                return inText ? `${csPrefix}${pageLineRgb} ${gRgbOp}` : `${csPrefix}${pageBgRgb} ${gRgbOp}`;
+              }
+              return match;
+            } else {
+              top.fill = cat;
+              if (!scanOnly && shouldCleanHighlightCategory(cat)) {
+                // Metin içindeyse normal metin rengine, metin dışındaysa (dikdörtgen/şekil dolgusuysa)
+                // kağıt arka plan rengine (beyaz) çevir ki hiçbir kutu ASLA siyaha dönüşmesin!
+                return inText ? `${csPrefix}${pageTextRgb} ${gRgbOp}` : `${csPrefix}${pageBgRgb} ${gRgbOp}`;
+              }
+              return match;
+            }
+          }
+          // 5) CMYK Renk Operatörleri (k, K)
+          if (gCmykOp !== undefined) {
+            const c = parseFloat(gC);
+            const m = parseFloat(gM);
+            const y = parseFloat(gY);
+            const k = parseFloat(gK);
+            const r = (1 - c) * (1 - k);
+            const g = (1 - m) * (1 - k);
+            const b = (1 - y) * (1 - k);
+            const cat = classifyHighlightColor(r, g, b);
+            const top = stateStack[stateStack.length - 1];
+            if (gCmykOp === 'K') top.stroke = cat;
+            else top.fill = cat;
+
+            if (!scanOnly && shouldCleanHighlightCategory(cat)) {
+              return inText ? `${pageTextRgb} rg` : `${pageBgRgb} rg`;
+            }
+            return match;
+          }
+          // 6) Gri Tonlama Operatörleri (g, G) -> aktif vurgu rengini sıfırlar
+          if (gGrayOp !== undefined) {
+            const top = stateStack[stateStack.length - 1];
+            if (gGrayOp === 'g') top.fill = null;
+            else top.stroke = null;
+            return match;
+          }
+          // 7) Dikdörtgen Vurgu Kutuları (x y w h re f* / f / F / B* / B)
+          if (gRectFill !== undefined) {
+            const activeFill = stateStack[stateStack.length - 1].fill;
+            if (!inText && activeFill) {
+              const dimMatches = [...gRectFill.matchAll(/([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\s+([0-9.-]+)\s+re/g)];
+              const isFullPageBg =
+                dimMatches.length > 0 &&
+                dimMatches.every((dm) => Math.abs(parseFloat(dm[3])) > 550 && Math.abs(parseFloat(dm[4])) > 750);
+              if (isFullPageBg) return match;
+
+              // Cevap Anahtarı için: vurgu kutusundan hemen sonra gelen şık harfini (a..e / A..E) yakala
+              if (collectAnswers && pageNumber !== null) {
+                const afterSlice = fullStr.slice(offset + match.length, offset + match.length + 420);
+                const optMatch = afterSlice.match(
+                  /BT[\s\S]{1,320}?(?:\(\s*([a-eA-E])\s*(?:\\\)|\.|\))|<004([4-8])000C>|<010([1-5])037F>)/
+                );
+                if (optMatch) {
+                  let optLetter = '?';
+                  if (optMatch[1]) optLetter = optMatch[1].toUpperCase();
+                  else if (optMatch[2]) optLetter = String.fromCharCode(65 + parseInt(optMatch[2], 10) - 4);
+                  else if (optMatch[3]) optLetter = String.fromCharCode(65 + parseInt(optMatch[3], 10) - 1);
+
+                  if (optLetter !== '?') {
+                    const qIdx = extractedAnswers.length + 1;
+                    extractedAnswers.push({
+                      id: `Soru_${qIdx}`,
+                      subject: currentSubject !== 'Genel' ? currentSubject : 'Test Soruları',
+                      qnum: qIdx,
+                      answer: optLetter,
+                      page: pageNumber,
+                      optionText: `${optLetter})`
+                    });
+                  }
+                }
+              }
+
+              if (!scanOnly && shouldCleanHighlightCategory(activeFill)) {
+                return ''; // Vurgu dikdörtgenini akıştan tamamen sil!
+              }
+            }
+            return match;
+          }
+          // 8) Çokgen / Yuvarlatılmış Kutu / Kalem Çizgisi Vurguları (m ... l ... f* / S)
+          if (gPathOp !== undefined) {
+            if (!inText && !scanOnly) {
+              const top = stateStack[stateStack.length - 1];
+              if (
+                (gPathOp === 'f' || gPathOp === 'f*' || gPathOp === 'F' || gPathOp === 'B' || gPathOp === 'B*') &&
+                shouldCleanHighlightCategory(top.fill)
+              ) {
+                return 'n'; // Yolu boyamadan kapat (no-op)
+              }
+              if ((gPathOp === 'S' || gPathOp === 's') && shouldCleanHighlightCategory(top.stroke)) {
+                return 'n'; // Fosforlu kalem çizgisini boyamadan kapat (no-op)
+              }
+            }
+            return match;
+          }
+          return match;
+        }
+      );
+    }
+
+    // 4. Her sayfanın içerik akışlarını (Content Streams) sırayla işle
+    const processedStreamOids = new Set();
+
+    for (let pageIdx = 0; pageIdx < pageContentGroups.length; pageIdx++) {
+      if (myToken !== processingToken) return false;
+      const cids = pageContentGroups[pageIdx];
+
+      for (const cid of cids) {
+        processedStreamOids.add(cid);
+        const streamBytes = await decodeObjectStream(cid);
+        if (!streamBytes) continue;
+        let decStr = bytesToBinaryString(streamBytes);
+
+        // Sayfanın orijinal olarak koyu (gece modu) arka plana sahip olup olmadığını tespit et
+        const hasDarkPageBg =
+          /0 0 0 rg\r?\nn 0 0 595\.2756 841\.8898 re f\*/.test(decStr) ||
+          /\.0353 \.0353 \.0431 rg/.test(decStr);
+
+        // Eğer sayfa beyaz kağıtlı bir PDF ise (!hasDarkPageBg) veya Gece Modunu Kaldır seçiliyse
+        // metin rengi her zaman koyu siyah/antrasit (.09 .10 .12) olmalıdır!
+        const isPageRemainingDark = hasDarkPageBg && !optLightMode;
+        const pageTextRgb = isPageRemainingDark ? '.929412 .909804 .862745' : '.09 .10 .12';
+        const pageMutedRgb = isPageRemainingDark ? '.603922 .627451 .65098' : '.38 .41 .45';
+        const pageBadgeRgb = isPageRemainingDark ? '1 .784314 .341176' : '.72 .42 .04';
+        const pageLineRgb = isPageRemainingDark ? '.164706 .180392 .215686' : '.82 .84 .87';
+        const pageBgRgb = isPageRemainingDark ? '0 0 0' : bgRgb;
+
+        const answersBeforePage = extractedAnswers.length;
+
+        // A1) ReportLab tarzı yeşil/bold şıkların Cevap Anahtarı taraması
+        const scanRegex = /q\s*([0-9.]+\s+[0-9.]+\s+[0-9.]+\s+rg\s*)?BT([\s\S]*?)ET\s*Q/g;
+        let sm;
+        while ((sm = scanRegex.exec(decStr)) !== null) {
+          const colStr = (sm[1] || '').trim();
+          const inner = sm[2];
+          const usesBold = boldFont && inner.includes(boldFont.fontName);
+          const activeCMap = usesBold ? boldFont.cmap : (regularFont ? regularFont.cmap : null);
+
+          const strParts = [];
+          const tjRegex = /\(((?:[^()\\]|\\.)*)\)\s*Tj/g;
+          let tm;
+          while ((tm = tjRegex.exec(inner)) !== null) {
+            const bArr = parsePdfLiteralString(tm[1]);
+            strParts.push(decodeBytesWithCMap(bArr, activeCMap));
+          }
+          const fullTxt = strParts.join(' ').trim();
+
+          if (inner.includes('15 Tf') && fullTxt.length > 2 && fullTxt !== '407' && fullTxt !== '396') {
+            currentSubject = fullTxt;
+          } else if (inner.includes('9 Tf')) {
+            const qm = fullTxt.match(/^(\d+)\.\s/);
+            if (qm) currentQnum = parseInt(qm[1], 10);
+          } else if (
+            (colStr.startsWith('.239216 .862745 .517647') || usesBold) &&
+            (inner.includes('8.6 Tf') || /^[A-E]\)/.test(fullTxt))
+          ) {
+            const om = fullTxt.match(/^([A-E])\)/);
+            const optLetter = om ? om[1] : '?';
+            if (optLetter !== '?') {
+              extractedAnswers.push({
+                id: `${currentSubject}_${currentQnum}_${extractedAnswers.length + 1}`,
+                subject: currentSubject,
+                qnum: currentQnum,
+                answer: optLetter,
+                page: pageIdx + 1,
+                optionText: fullTxt
+              });
+            }
+          }
+        }
+
+        // B) Kırmızı '!' şüpheli soru kutularını tespit et
+        const warnBoxRegex = /q\s*1 0 0 1 77\.6378 [0-9.]+ cm\s*q\s*\.078431 \.086275 \.109804 rg([\s\S]*?)Q\s*Q\s*Q/g;
+        let wm;
+        while ((wm = warnBoxRegex.exec(decStr)) !== null) {
+          const wInner = wm[1];
+          const wParts = [];
+          const tjRegex = /\(((?:[^()\\]|\\.)*)\)\s*Tj/g;
+          let tm;
+          while ((tm = tjRegex.exec(wInner)) !== null) {
+            const bArr = parsePdfLiteralString(tm[1]);
+            wParts.push(decodeBytesWithCMap(bArr, regularFont ? regularFont.cmap : null));
+          }
+          const wText = wParts.join(' ').replace(/\s+/g, ' ').trim();
+          if (wText) {
+            extractedWarnings.push({
+              page: pageIdx + 1,
+              subject: currentSubject,
+              qnum: currentQnum,
+              text: wText
+            });
+          }
+        }
+
+        // C) Kırmızı '!' ipucu kutularını gizle veya açık moda uyarla
+        if (!scanOnly) {
+          if (optHideSpoilers) {
+            decStr = decStr.replace(warnBoxRegex, '');
+          } else if (optLightMode && hasDarkPageBg) {
+            decStr = decStr.replace(/\.078431 \.086275 \.109804 rg/g, '.99 .94 .94 rg');
+            decStr = decStr.replace(/1 \.419608 \.419608 rg/g, '.75 .12 .12 rg');
+            decStr = decStr.replace(/1 \.419608 \.419608 RG/g, '.85 .35 .35 RG');
+          }
+
+          // D) Üst ve Alt Bilgileri Gizle
+          if (optCleanWatermark) {
+            decStr = decStr.replace(/BT [0-9. ]+ Tm \/F2\+0 7 Tf 8\.4 TL \(made in egemen\) Tj T\* ET\s*/g, '');
+            decStr = decStr.replace(/BT 1 0 0 1 [0-9.]+ 813\.8898 Tm \/F2\+0 7 Tf 8\.4 TL \([^\r\n]*\) Tj T\* ET\s*/g, '');
+          }
+
+          // E) Yeşil ve Kalın (Bold) doğru cevapları normal (Regular) fonta ve standart metin rengine dönüştür
+          if (optHideGreen) {
+            const greenBlockRegex = /q\s*\.239216 \.862745 \.517647 rg\s*BT([\s\S]*?)ET\s*Q/g;
+            decStr = decStr.replace(greenBlockRegex, (fullMatch, btInner) => {
+              let newInner = btInner;
+              if (btInner.includes('8.6 Tf') || (boldFont && btInner.includes(boldFont.fontName))) {
+                if (btInner.includes('8.6 Tf')) {
+                  newInner = convertBoldToRegularInBt(btInner);
+                }
+              }
+              return `q\n${pageTextRgb} rg\nBT${newInner}ET\nQ`;
+            });
+
+            if (boldFont && regularFont) {
+              decStr = decStr.replace(/BT([\s\S]*?)ET/g, (fullBt, btInner) => {
+                if (!btInner.includes(boldFont.fontName)) return fullBt;
+                if (btInner.includes('8.6 Tf')) {
+                  return 'BT' + convertBoldToRegularInBt(btInner) + 'ET';
+                }
+                const firstTj = btInner.match(/\(((?:[^()\\]|\\.)*)\)\s*Tj/);
+                if (firstTj) {
+                  const txt = decodeBytesWithCMap(parsePdfLiteralString(firstTj[1]), boldFont.cmap).trim();
+                  if (/^[A-E][).]/.test(txt)) {
+                    return 'BT' + convertBoldToRegularInBt(btInner) + 'ET';
+                  }
+                }
+                return fullBt;
+              });
+            }
+
+            decStr = decStr.replace(/\.239216 \.862745 \.517647 rg/g, `${pageTextRgb} rg`);
+            decStr = decStr.replace(/\.2039 \.8275 \.6 (rg|RG)/g, (m, op) => `${pageTextRgb} ${op}`);
+          }
+
+          // F) Gece Modu -> Beyaz Kağıt Modu renk dönüşümleri (Durumlu vurgu temizleyiciden önce çalışır)
+          // Yalnızca sayfada gerçekten koyu arka plan varsa dönüştürür; beyaz PDF'leri ASLA siyaha çevirmez!
+          if (optLightMode && hasDarkPageBg) {
+            decStr = decStr.replace(
+              /0 0 0 rg\r?\nn 0 0 595\.2756 841\.8898 re f\*/g,
+              `${bgRgb} rg\nn 0 0 595.2756 841.8898 re f*`
+            );
+            decStr = decStr.replace(/\.0353 \.0353 \.0431 (rg|RG)/g, (m, op) => `${bgRgb} ${op}`);
+            decStr = decStr.replace(/\.0706 \.0745 \.0941 (rg|RG)/g, (m, op) => `${bgRgb} ${op}`);
+            decStr = decStr.replace(/\.0941 \.0941 \.1059 (rg|RG)/g, (m, op) => `${bgRgb} ${op}`);
+            decStr = decStr.replace(/\.1529 \.1529 \.1647 (rg|RG)/g, (m, op) => `${pageLineRgb} ${op}`);
+            decStr = decStr.replace(/\.929412 \.909804 \.862745 rg/g, `${pageTextRgb} rg`);
+            decStr = decStr.replace(/\.9725 \.9804 \.9882 (rg|RG)/g, (m, op) => `${pageTextRgb} ${op}`);
+            decStr = decStr.replace(/\.603922 \.627451 \.65098 rg/g, `${pageMutedRgb} rg`);
+            decStr = decStr.replace(/1 \.784314 \.341176 rg/g, `${pageBadgeRgb} rg`);
+            decStr = decStr.replace(/\.164706 \.180392 \.215686 RG/g, `${pageLineRgb} RG`);
+          }
+        }
+
+        // G) Durumlu (Stateful q/Q ve BT/ET) Highlight Görünümlü Vurguları Silme ve Cevap Anahtarı Çıkarma
+        // Hem scanOnly modunda (vurgulu şıkları Cevap Anahtarına çıkarmak için) hem de temizleme modunda çalışır!
+        const collectHighlightAnswers = extractedAnswers.length === answersBeforePage;
+        if (scanOnly || selectedHighlightColors.size > 0 || optHideGreen) {
+          decStr = runStatefulHighlightCleaner(
+            decStr,
+            pageIdx + 1,
+            pageTextRgb,
+            pageLineRgb,
+            pageBgRgb,
+            collectHighlightAnswers
+          );
+        }
+
+        if (scanOnly) continue;
+
+        const newStreamBytes = binaryStringToBytes(decStr);
+        const compressed = await flateCompress(newStreamBytes);
+        const compressedStr = bytesToBinaryString(compressed);
+        const newObjBody = `<<\n/Filter /FlateDecode /Length ${compressed.length}\n>>\nstream\n${compressedStr}\nendstream`;
+        objects.set(cid, newObjBody);
+      }
+    }
+
+    // 4B. Varsa Form XObject (/Subtype /Form) akışlarındaki highlight kutularını da temizle
+    if (!scanOnly && selectedHighlightColors.size > 0) {
+      for (const foid of formStreamOids) {
+        if (processedStreamOids.has(foid)) continue;
+        const fBody = objects.get(foid);
+        if (!fBody) continue;
+        const sIdx = fBody.indexOf('stream');
+        if (sIdx === -1) continue;
+        const dictPart = fBody.slice(0, sIdx).trim();
+        try {
+          const streamBytes = await decodeObjectStream(foid);
+          if (!streamBytes) continue;
+          const decStr = bytesToBinaryString(streamBytes);
+          const cleanedStr = runStatefulHighlightCleaner(decStr, null, '.09 .10 .12', '.82 .84 .87', bgRgb, false);
+          if (cleanedStr !== decStr) {
+            const newStreamBytes = binaryStringToBytes(cleanedStr);
+            const compressed = await flateCompress(newStreamBytes);
+            const compressedStr = bytesToBinaryString(compressed);
+            const updatedDict = dictPart
+              .replace(/\/Length\s+\d+/, `/Length ${compressed.length}`)
+              .replace(/\/Filter\s*(?:\[[^\]]*\]|\/\S+)/, '/Filter /FlateDecode');
+            objects.set(foid, `${updatedDict}\nstream\n${compressedStr}\nendstream`);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (scanOnly) return true;
+
+    // 5. Yeni PDF dosyasını xref tablosuyla birlikte yeniden inşa et
+    const parts = ['%PDF-1.4\n%\x93\x8c\x8b\x9e\n'];
+    let currentOffset = parts[0].length;
+    const offsets = new Map();
+
+    for (let oid = 1; oid <= maxOid; oid++) {
+      const body = objects.get(oid);
+      if (body === undefined) continue;
+      offsets.set(oid, currentOffset);
+      const chunk = `${oid} 0 obj\n${body}\nendobj\n`;
+      parts.push(chunk);
+      currentOffset += chunk.length;
+    }
+
+    const xrefOffset = currentOffset;
+    let xrefStr = `xref\n0 ${maxOid + 1}\n0000000000 65535 f \n`;
+    for (let oid = 1; oid <= maxOid; oid++) {
+      if (offsets.has(oid)) {
+        xrefStr += String(offsets.get(oid)).padStart(10, '0') + ' 00000 n \n';
+      } else {
+        xrefStr += '0000000000 65535 f \n';
+      }
+    }
+    parts.push(xrefStr);
+
+    const rootMatch = rawStr.match(/\/Root\s+(\d+\s+0\s+R)/);
+    const infoMatch = rawStr.match(/\/Info\s+(\d+\s+0\s+R)/);
+    const rootRef = rootMatch ? rootMatch[1] : '92 0 R';
+    const infoLine = infoMatch ? `/Info ${infoMatch[1]}\n` : '';
+
+    const trailerStr = `trailer\n<<\n${infoLine}/Root ${rootRef}\n/Size ${maxOid + 1}\n>>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+    parts.push(trailerStr);
+
+    const finalPdfStr = parts.join('');
+    convertedPdfBytes = binaryStringToBytes(finalPdfStr);
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    updateUiWithConvertedPdf(pageContentGroups.length, elapsed, 'Vektörel Mod', false);
+    return true;
+  }
+
+  // ============================================================================
+  // YEDEK MOTOR: GÖRÜNTÜ / PİKSEL TABANLI DÖNÜŞTÜRÜCÜ (Akıcı İlerleme Çubuklu)
+  // ============================================================================
+  async function processPdfViaCanvas(myToken) {
+    if (!window.pdfjsLib || !window.jspdf) {
+      setStatus('warning', '⚠️ Görüntü tabanlı mod için internet bağlantısı (PDF.js & jsPDF) gereklidir.');
+      return;
+    }
+    const t0 = performance.now();
+    const pdfDoc = await window.pdfjsLib.getDocument({ data: originalPdfBytes.slice() }).promise;
+    const numPages = pdfDoc.numPages;
+
+    const optLightMode = document.getElementById('optLightMode').checked;
+    const optHideGreen = document.getElementById('optHideGreen').checked;
+    const selectedHighlightColors = getSelectedHighlightColors();
+    const paperTone = document.getElementById('paperTone').value;
+    const bgR = paperTone === 'cream' ? 250 : 255;
+    const bgG = paperTone === 'cream' ? 247 : 255;
+    const bgB = paperTone === 'cream' ? 240 : 255;
+
+    const { jsPDF } = window.jspdf;
+    const outPdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4', compress: true });
+
+    for (let p = 1; p <= numPages; p++) {
+      if (myToken !== processingToken) return;
+      const pct = Math.round((p / numPages) * 100);
+      setStatus(
+        'info',
+        `⏳ Görüntü tabanlı dönüştürülüyor: <strong>Sayfa ${p} / ${numPages}</strong> (%${pct})` +
+        `<div class="progress-wrap"><div class="progress-fill" style="width:${pct}%"></div></div>`
+      );
+      await yieldToUi();
+
+      const page = await pdfDoc.getPage(p);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = imgData.data;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Sayfanın gerçekten gece modunda (koyu zeminde) olup olmadığını tespit et
+      let darkPixelCount = 0;
+      const sampleStep = 64;
+      let totalSampled = 0;
+      for (let i = 0; i < d.length; i += sampleStep) {
+        const lum = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        if (lum < 60) darkPixelCount++;
+        totalSampled++;
+      }
+      const isPageDark = (darkPixelCount / Math.max(1, totalSampled)) > 0.45;
+
+      const colorMask = new Uint8Array(w * h);
+      for (let i = 0, idx = 0; i < d.length; i += 4, idx++) {
+        const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+        const cName = classifyHighlightColor(r, g, b);
+        if (cName && ((optHideGreen && cName === 'green') || selectedHighlightColors.has(cName))) {
+          colorMask[idx] = 1;
+        }
+      }
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          const i = idx * 4;
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+
+          if (colorMask[idx]) {
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            // Beyaz kağıtlı bir sayfada highlight kutusu dolgusu ise (veya açık tonlu vurguysa)
+            // ASLA siyaha çevirme, doğrudan kağıt arka plan rengine (beyaza) çevir!
+            const isHighlightBoxFill =
+              !isPageDark &&
+              (lum > 110 ||
+                ((x >= 4 && colorMask[idx - 4]) || (x + 4 < w && colorMask[idx + 4])) &&
+                ((y >= 4 && colorMask[idx - 4 * w]) || (y + 4 < h && colorMask[idx + 4 * w])));
+
+            if (isHighlightBoxFill) {
+              d[i] = bgR; d[i + 1] = bgG; d[i + 2] = bgB;
+              continue;
+            }
+            const rightColored = x + 1 < w ? colorMask[idx + 1] : 0;
+            const bottomColored = y + 1 < h ? colorMask[idx + w] : 0;
+            if ((!rightColored || !bottomColored) && lum < 200) {
+              d[i] = isPageDark && !optLightMode ? 0 : bgR;
+              d[i + 1] = isPageDark && !optLightMode ? 0 : bgG;
+              d[i + 2] = isPageDark && !optLightMode ? 0 : bgB;
+              continue;
+            }
+            const target = (optLightMode || !isPageDark) ? 24 : 230;
+            d[i] = target; d[i + 1] = target; d[i + 2] = target;
+            continue;
+          }
+
+          // Yalnızca sayfa gerçekten koyu zemindeyse (gece modundaysa) açık moda çevir!
+          if (optLightMode && isPageDark) {
+            const brightness = (r + g + b) / 3;
+            if (brightness < 30) {
+              d[i] = bgR; d[i + 1] = bgG; d[i + 2] = bgB;
+            } else {
+              d[i] = 255 - r;
+              d[i + 1] = 255 - g;
+              d[i + 2] = 255 - b;
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      const imgUrl = canvas.toDataURL('image/jpeg', 0.95);
+      if (p > 1) outPdf.addPage();
+      outPdf.addImage(imgUrl, 'JPEG', 0, 0, 595.28, 841.89);
+    }
+
+    if (myToken !== processingToken) return;
+    const arrayBuf = outPdf.output('arraybuffer');
+    convertedPdfBytes = new Uint8Array(arrayBuf);
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    updateUiWithConvertedPdf(numPages, elapsed, 'Görüntü Modu', false);
+  }
+
+  // ============================================================================
+  // ARAYÜZ GÜNCELLEME, ÖNİZLEME, OPTİK FORM VE İNDİRME
+  // ============================================================================
+  function updateUiWithConvertedPdf(pageCount, elapsedSec, modeLabel, isOriginal = false) {
+    if (convertedPdfBlobUrl) {
+      URL.revokeObjectURL(convertedPdfBlobUrl);
+    }
+    const blob = new Blob([convertedPdfBytes], { type: 'application/pdf' });
+    convertedPdfBlobUrl = URL.createObjectURL(blob);
+
+    const iframe = document.getElementById('pdfPreviewFrame');
+    const emptyState = document.getElementById('emptyState');
+    emptyState.style.display = 'none';
+    iframe.style.display = 'block';
+    iframe.src = convertedPdfBlobUrl;
+
+    document.getElementById('downloadCleanPdfBtn').disabled = false;
+    document.getElementById('downloadCleanPdfTopBtn').disabled = false;
+    document.getElementById('printAnswerKeyBtn').disabled = extractedAnswers.length === 0;
+
+    document.getElementById('answerCountBadge').textContent = extractedAnswers.length;
+
+    if (isOriginal) {
+      document.getElementById('pageStatsLabel').textContent =
+        `Orijinal Görünüm · ${extractedAnswers.length} Soru Cevabı Tespit Edildi`;
+      setStatus(
+        'info',
+        `📄 <strong>PDF orijinal (varsayılan) haliyle açıldı.</strong><br/>` +
+        `Temizlemek istediğiniz özellikleri sol menüden seçebilirsiniz (veya <strong>"Tümünü Seç"</strong> butonuna tıklayabilirsiniz).`
+      );
+    } else {
+      document.getElementById('pageStatsLabel').textContent =
+        `${pageCount} Sayfa · ${extractedAnswers.length} Soru · ${elapsedSec} sn (${modeLabel})`;
+      setStatus(
+        'success',
+        `✅ <strong>Dönüştürme Tamamlandı!</strong> (${elapsedSec} sn · ${modeLabel} · %100 Kalite)<br/>` +
+        `• Seçtiğiniz temizleme ayarları <strong>${pageCount} sayfaya</strong> uygulandı.<br/>` +
+        `• <strong>${extractedAnswers.length} sorunun</strong> cevabı Cevap Anahtarına aktarıldı.`
+      );
+    }
+
+    populateSubjectFilter();
+    renderOpticalList();
+    renderAnswerKeyTab();
+  }
+
+  function downloadCleanPdf() {
+    if (!convertedPdfBytes) return;
+    const blob = new Blob([convertedPdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${originalFileName}_Temiz_Test.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function switchTab(tab) {
+    document.getElementById('tabBtnPreview').classList.toggle('active', tab === 'preview');
+    document.getElementById('tabBtnAnswerKey').classList.toggle('active', tab === 'answerkey');
+    document.getElementById('panePreview').classList.toggle('active', tab === 'preview');
+    document.getElementById('paneAnswerKey').classList.toggle('active', tab === 'answerkey');
+  }
+
+  function toggleOpticalDrawer() {
+    const drawer = document.getElementById('opticalDrawer');
+    drawer.classList.toggle('hidden');
+  }
+
+  function populateSubjectFilter() {
+    const sel = document.getElementById('optSubjectFilter');
+    const currentVal = sel.value;
+    const subjects = [...new Set(extractedAnswers.map((a) => a.subject))];
+    sel.innerHTML = `<option value="ALL">Tüm Dersler (${extractedAnswers.length})</option>`;
+    for (const s of subjects) {
+      const count = extractedAnswers.filter((a) => a.subject === s).length;
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = `${s} (${count})`;
+      sel.appendChild(opt);
+    }
+    if ([...sel.options].some((o) => o.value === currentVal)) {
+      sel.value = currentVal;
+    }
+  }
+
+  function toggleExamReveal() {
+    examRevealed = !examRevealed;
+    renderOpticalList();
+  }
+
+  function resetOpticalMarks() {
+    userMarks = {};
+    examRevealed = false;
+    renderOpticalList();
+  }
+
+  function markOption(qId, optLetter) {
+    if (userMarks[qId] === optLetter) {
+      delete userMarks[qId];
+    } else {
+      userMarks[qId] = optLetter;
+    }
+    renderOpticalList();
+  }
+
+  function renderOpticalList() {
+    const container = document.getElementById('opticalList');
+    const subjFilter = document.getElementById('optSubjectFilter').value;
+    const checkMode = document.getElementById('optCheckMode').value;
+    const revealBtn = document.getElementById('revealExamBtn');
+
+    revealBtn.style.display = checkMode === 'exam' ? 'inline-flex' : 'none';
+    revealBtn.textContent = examRevealed ? '📖 Cevapları Tekrar Gizle' : '✅ Cevapları Kontrol Et / Göster';
+
+    const filtered = extractedAnswers.filter(
+      (item) => subjFilter === 'ALL' || item.subject === subjFilter
+    );
+
+    let correctCount = 0;
+    let wrongCount = 0;
+    let emptyCount = 0;
+
+    container.innerHTML = '';
+    for (const item of filtered) {
+      const chosen = userMarks[item.id];
+      const shouldReveal = (checkMode === 'instant' && chosen) || (checkMode === 'exam' && examRevealed && chosen);
+
+      if (!chosen) {
+        emptyCount++;
+      } else if (chosen === item.answer) {
+        correctCount++;
+      } else {
+        wrongCount++;
+      }
+
+      const row = document.createElement('div');
+      row.className = 'opt-row';
+      if (shouldReveal) {
+        row.classList.add(chosen === item.answer ? 'correct' : 'wrong');
+      }
+
+      const info = document.createElement('div');
+      info.className = 'opt-qinfo';
+      info.innerHTML = `
+        <span class="opt-qnum">${item.subject} · Soru ${item.qnum}</span>
+        <span class="opt-qpage">Sayfa ${item.page}</span>
+      `;
+
+      const bubbles = document.createElement('div');
+      bubbles.className = 'opt-bubbles';
+
+      ['A', 'B', 'C', 'D', 'E'].forEach((letter) => {
+        const b = document.createElement('button');
+        b.className = 'bubble';
+        b.textContent = letter;
+        if (chosen === letter) b.classList.add('selected');
+
+        if (shouldReveal) {
+          if (letter === item.answer) {
+            b.classList.add('reveal-correct');
+          } else if (chosen === letter && chosen !== item.answer) {
+            b.classList.add('reveal-wrong');
+          }
+        }
+        b.onclick = () => markOption(item.id, letter);
+        bubbles.appendChild(b);
+      });
+
+      row.appendChild(info);
+      row.appendChild(bubbles);
+      container.appendChild(row);
+    }
+
+    document.getElementById('statTotal').textContent = filtered.length;
+    document.getElementById('statCorrect').textContent =
+      checkMode === 'exam' && !examRevealed ? '?' : correctCount;
+    document.getElementById('statWrong').textContent =
+      checkMode === 'exam' && !examRevealed ? '?' : wrongCount;
+    document.getElementById('statEmpty').textContent = emptyCount;
+  }
+
+  function renderAnswerKeyTab() {
+    const container = document.getElementById('answerKeyContainer');
+    if (extractedAnswers.length === 0) return;
+
+    const subjects = [...new Set(extractedAnswers.map((a) => a.subject))];
+    let html = '';
+
+    for (const s of subjects) {
+      const items = extractedAnswers.filter((a) => a.subject === s);
+      html += `
+        <div class="ak-subject-card" style="margin-bottom:18px;">
+          <div class="ak-subject-header">
+            <h3>${s}</h3>
+            <span class="badge-pill">${items.length} Soru</span>
+          </div>
+          <div class="ak-grid">
+            ${items
+              .map(
+                (it) => `
+              <div class="ak-cell" title="${it.optionText.replace(/"/g, '&quot;')}">
+                <span class="q">${it.qnum}.</span>
+                <span class="a">${it.answer}</span>
+              </div>`
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (extractedWarnings.length > 0) {
+      html += `
+        <div class="ak-subject-card">
+          <div class="ak-subject-header">
+            <h3>⚠️ Testten Gizlenen Şüpheli Soru Açıklamaları ("!" Kutuları)</h3>
+            <span class="badge-pill">${extractedWarnings.length} Not</span>
+          </div>
+          <div class="warnings-list">
+            ${extractedWarnings
+              .map(
+                (w) => `
+              <div class="warning-item">
+                <strong>${w.subject} · Soru ${w.qnum} (Sayfa ${w.page}):</strong><br/>
+                ${w.text}
+              </div>`
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = html;
+  }
+
+  function printAnswerKey() {
+    if (extractedAnswers.length === 0) return;
+    const subjects = [...new Set(extractedAnswers.map((a) => a.subject))];
+    const win = window.open('', '_blank');
+    let bodyHtml = `
+      <html>
+      <head>
+        <title>${originalFileName} - Cevap Anahtarı</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+          h1 { font-size: 18px; margin-bottom: 16px; border-bottom: 2px solid #111; padding-bottom: 6px; }
+          h2 { font-size: 14px; margin: 16px 0 8px; color: #1e3a8a; }
+          .grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
+          .cell { border: 1px solid #cbd5e1; padding: 4px 6px; font-size: 11.5px; border-radius: 4px; display:flex; justify-content:space-between; }
+          .warn { background: #fffbeb; border-left: 3px solid #d97706; padding: 8px 10px; font-size: 11.5px; margin-bottom: 6px; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()" style="margin-bottom:16px; padding:8px 14px; font-weight:bold; cursor:pointer;">🖨️ Yazdır / PDF Olarak Kaydet</button>
+        <h1>${originalFileName} — Cevap Anahtarı (${extractedAnswers.length} Soru)</h1>
+    `;
+
+    for (const s of subjects) {
+      const items = extractedAnswers.filter((a) => a.subject === s);
+      bodyHtml += `<h2>${s} (${items.length} Soru)</h2><div class="grid">`;
+      for (const it of items) {
+        bodyHtml += `<div class="cell"><span>${it.qnum}.</span><strong>${it.answer}</strong></div>`;
+      }
+      bodyHtml += `</div>`;
+    }
+
+    if (extractedWarnings.length > 0) {
+      bodyHtml += `<h2>Şüpheli Soru Notları (!)</h2>`;
+      for (const w of extractedWarnings) {
+        bodyHtml += `<div class="warn"><strong>${w.subject} - Soru ${w.qnum} (Sayfa ${w.page}):</strong> ${w.text}</div>`;
+      }
+    }
+
+    bodyHtml += `</body></html>`;
+    win.document.write(bodyHtml);
+    win.document.close();
+  }
+</script>
+</body>
+</html>
