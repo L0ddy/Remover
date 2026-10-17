@@ -1160,23 +1160,23 @@
                   <span class="color-dot" style="background:#facc15;"></span>
                   Sarı
                 </label>
-                <label class="color-chip active" id="chip-green">
-                  <input type="checkbox" value="green" checked onchange="updateColorChip(this)" />
+                <label class="color-chip" id="chip-green">
+                  <input type="checkbox" value="green" onchange="updateColorChip(this)" />
                   <span class="color-dot" style="background:#22c55e;"></span>
                   Yeşil
                 </label>
-                <label class="color-chip active" id="chip-blue">
-                  <input type="checkbox" value="blue" checked onchange="updateColorChip(this)" />
+                <label class="color-chip" id="chip-blue">
+                  <input type="checkbox" value="blue" onchange="updateColorChip(this)" />
                   <span class="color-dot" style="background:#38bdf8;"></span>
                   Mavi
                 </label>
-                <label class="color-chip active" id="chip-pink">
-                  <input type="checkbox" value="pink" checked onchange="updateColorChip(this)" />
+                <label class="color-chip" id="chip-pink">
+                  <input type="checkbox" value="pink" onchange="updateColorChip(this)" />
                   <span class="color-dot" style="background:#f472b6;"></span>
                   Pembe
                 </label>
-                <label class="color-chip active" id="chip-orange">
-                  <input type="checkbox" value="orange" checked onchange="updateColorChip(this)" />
+                <label class="color-chip" id="chip-orange">
+                  <input type="checkbox" value="orange" onchange="updateColorChip(this)" />
                   <span class="color-dot" style="background:#fb923c;"></span>
                   Turuncu
                 </label>
@@ -1523,6 +1523,11 @@
   // RGB (0..1) rengini 5 temel vurgu renginden birine sınıflandırır:
   // 'yellow' | 'green' | 'blue' | 'pink' | 'orange' | null
   function classifyHighlightColor(r, g, b) {
+    if (r > 1 || g > 1 || b > 1) {
+      r /= 255;
+      g /= 255;
+      b /= 255;
+    }
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
     const delta = max - min;
@@ -1542,8 +1547,8 @@
 
     if (h >= 15 && h < 45) return 'orange';
     if (h >= 45 && h < 75) return 'yellow';
-    if (h >= 75 && h < 168) return 'green';
-    if (h >= 168 && h < 265) return 'blue';
+    if (h >= 75 && h < 150) return 'green';
+    if (h >= 150 && h < 265) return 'blue';
     if (h >= 265 || h < 15) return 'pink';
     return null;
   }
@@ -2036,10 +2041,67 @@
 
     // 3. Sayfa sırasına göre /Contents nesnelerini (tekil veya dizi) ve Form XObject akışlarını bul
     const selectedHighlightColors = getSelectedHighlightColors();
+    const optLightMode = document.getElementById('optLightMode').checked;
+    const optHideGreen = document.getElementById('optHideGreen').checked;
+    const optHideSpoilers = document.getElementById('optHideSpoilers').checked;
+    const optCleanWatermark = document.getElementById('optCleanWatermark').checked;
+    const paperTone = document.getElementById('paperTone').value;
+    const bgRgb = paperTone === 'cream' ? '.980 .969 .941' : '1 1 1';
+
+    function shouldCleanHighlightCategory(cat) {
+      if (!cat) return false;
+      if (selectedHighlightColors.has(cat)) return true;
+      if (optHideGreen && cat === 'green') return true;
+      return false;
+    }
+
+    async function getAnnotationColorCategory(annotOid) {
+      const aBody = objects.get(annotOid);
+      if (!aBody) return null;
+      if (/\/Subtype\s*\/(Link|Widget|Popup)\b/.test(aBody)) {
+        return null;
+      }
+      const cMatch = aBody.match(/\/C\s*\[([\s\S]*?)\]/) || aBody.match(/\/IC\s*\[([\s\S]*?)\]/);
+      if (cMatch) {
+        const nums = cMatch[1].trim().split(/\s+/).map(Number).filter((v) => !isNaN(v));
+        if (nums.length >= 3) {
+          let r = nums[0], g = nums[1], b = nums[2];
+          if (r > 1 || g > 1 || b > 1) { r /= 255; g /= 255; b /= 255; }
+          return classifyHighlightColor(r, g, b);
+        } else if (nums.length === 4) {
+          const c = nums[0], m = nums[1], y = nums[2], k = nums[3];
+          const r = (1 - c) * (1 - k);
+          const g = (1 - m) * (1 - k);
+          const b = (1 - y) * (1 - k);
+          return classifyHighlightColor(r, g, b);
+        }
+      }
+      const apMatch = aBody.match(/\/AP\s*<<[\s\S]*?\/N\s+(\d+)\s+0\s+R/);
+      if (apMatch) {
+        const apOid = parseInt(apMatch[1], 10);
+        try {
+          const apBytes = await decodeObjectStream(apOid);
+          if (apBytes) {
+            const apStr = bytesToBinaryString(apBytes);
+            const cmykMatch = apStr.match(/([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(?:k|K|scn|SCN)\b/);
+            if (cmykMatch) {
+              const c = parseFloat(cmykMatch[1]), m = parseFloat(cmykMatch[2]), y = parseFloat(cmykMatch[3]), k = parseFloat(cmykMatch[4]);
+              return classifyHighlightColor((1 - c) * (1 - k), (1 - m) * (1 - k), (1 - y) * (1 - k));
+            }
+            const rgbMatch = apStr.match(/([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(?:rg|RG|scn|SCN)\b/);
+            if (rgbMatch) {
+              return classifyHighlightColor(parseFloat(rgbMatch[1]), parseFloat(rgbMatch[2]), parseFloat(rgbMatch[3]));
+            }
+          }
+        } catch (_) {}
+      }
+      return null;
+    }
+
     const pageContentGroups = []; // Her sayfa için [cid1, cid2, ...]
     const formStreamOids = new Set();
 
-    for (const [oid, body] of objects.entries()) {
+    for (const [oid, body] of Array.from(objects.entries())) {
       if (/\/Type\s*\/Page\b/.test(body) && !/\/Type\s*\/Pages\b/.test(body)) {
         const cidsForPage = [];
         const arrMatch = body.match(/\/Contents\s*\[([\s\S]*?)\]/);
@@ -2056,22 +2118,80 @@
         if (cidsForPage.length > 0) {
           pageContentGroups.push(cidsForPage);
         }
-        // Highlight silme açıksa hem satır içi [ ... ] hem de dolaylı (N 0 R) /Annots referanslarını kaldır
+        // Granüler /Annots Temizleme: Yalnızca seçilen renkteki highlight anotasyonlarını sil,
+        // seçilmeyen renkleri (örn. mavi) ve Link/Widget gibi diğer anotasyonları ASLA silme!
         if (!scanOnly && selectedHighlightColors.size > 0 && body.includes('/Annots')) {
-          objects.set(oid, body.replace(/\/Annots\s*(?:\[[\s\S]*?\]|\d+\s+0\s+R)/g, ''));
+          let updatedBody = body;
+          const directAnnotsMatch = updatedBody.match(/\/Annots\s*\[([\s\S]*?)\]/);
+          const indirectAnnotsMatch = updatedBody.match(/\/Annots\s+(\d+)\s+0\s+R/);
+
+          if (directAnnotsMatch) {
+            const rawList = directAnnotsMatch[1];
+            const refRegex = /(\d+)\s+0\s+R/g;
+            const kept = [];
+            let rm;
+            while ((rm = refRegex.exec(rawList)) !== null) {
+              const annotOid = parseInt(rm[1], 10);
+              const cat = await getAnnotationColorCategory(annotOid);
+              if (cat && shouldCleanHighlightCategory(cat)) {
+                const aBody = objects.get(annotOid) || '';
+                const apM = aBody.match(/\/AP\s*<<[\s\S]*?\/N\s+(\d+)\s+0\s+R/);
+                if (apM) {
+                  objects.set(parseInt(apM[1], 10), '<< /Length 0 >>\nstream\n\nendstream');
+                }
+                const popM = aBody.match(/\/Popup\s+(\d+)\s+0\s+R/);
+                if (popM) {
+                  objects.set(parseInt(popM[1], 10), '<< /Type /Annot /Rect [0 0 0 0] >>');
+                }
+                objects.set(annotOid, '<< /Type /Annot /Rect [0 0 0 0] >>');
+              } else {
+                kept.push(rm[0]);
+              }
+            }
+            if (kept.length === 0) {
+              updatedBody = updatedBody.replace(/\/Annots\s*\[[\s\S]*?\]/, '');
+            } else {
+              updatedBody = updatedBody.replace(/\/Annots\s*\[[\s\S]*?\]/, `/Annots [ ${kept.join(' ')} ]`);
+            }
+            objects.set(oid, updatedBody);
+          } else if (indirectAnnotsMatch) {
+            const listOid = parseInt(indirectAnnotsMatch[1], 10);
+            const listBody = objects.get(listOid) || '';
+            const refRegex = /(\d+)\s+0\s+R/g;
+            const kept = [];
+            let rm;
+            while ((rm = refRegex.exec(listBody)) !== null) {
+              const annotOid = parseInt(rm[1], 10);
+              const cat = await getAnnotationColorCategory(annotOid);
+              if (cat && shouldCleanHighlightCategory(cat)) {
+                const aBody = objects.get(annotOid) || '';
+                const apM = aBody.match(/\/AP\s*<<[\s\S]*?\/N\s+(\d+)\s+0\s+R/);
+                if (apM) {
+                  objects.set(parseInt(apM[1], 10), '<< /Length 0 >>\nstream\n\nendstream');
+                }
+                const popM = aBody.match(/\/Popup\s+(\d+)\s+0\s+R/);
+                if (popM) {
+                  objects.set(parseInt(popM[1], 10), '<< /Type /Annot /Rect [0 0 0 0] >>');
+                }
+                objects.set(annotOid, '<< /Type /Annot /Rect [0 0 0 0] >>');
+              } else {
+                kept.push(rm[0]);
+              }
+            }
+            if (kept.length === 0) {
+              updatedBody = updatedBody.replace(/\/Annots\s+\d+\s+0\s+R/, '');
+              objects.set(listOid, '[]');
+              objects.set(oid, updatedBody);
+            } else {
+              objects.set(listOid, `[ ${kept.join(' ')} ]`);
+            }
+          }
         }
       } else if (/\/Subtype\s*\/Form\b/.test(body) && body.includes('stream')) {
         formStreamOids.add(oid);
       }
     }
     if (pageContentGroups.length === 0) return false;
-
-    const optLightMode = document.getElementById('optLightMode').checked;
-    const optHideGreen = document.getElementById('optHideGreen').checked;
-    const optHideSpoilers = document.getElementById('optHideSpoilers').checked;
-    const optCleanWatermark = document.getElementById('optCleanWatermark').checked;
-    const paperTone = document.getElementById('paperTone').value;
-    const bgRgb = paperTone === 'cream' ? '.980 .969 .941' : '1 1 1';
 
     extractedAnswers = [];
     extractedWarnings = [];
@@ -2082,15 +2202,9 @@
     // PDF grafik durumu yığınını (q/Q) takip eder; dış katmanda tanımlanan (1 1 0 rg vb.)
     // ve sonraki tüm sorularda/şıklarda tekrar kullanılan sarı/renkli vurgu kutularını (re f*, f, B*)
     // tek bir tanesini bile kaçırmadan ve ASLA siyah kutuya çevirmeden %100 temizler!
+    // CMYK (4 bileşen) regex'i RGB (3 bileşen)'den önce gelerek yanlış eşleşmeyi önler.
     const masterHighlightRegex =
-      /(\((?:[^()\\]|\\.)*\)|<[0-9A-Fa-f\s]*>|\/[A-Za-z0-9_+#.-]+)|(\bq\b)|(\bQ\b)|(\bBT\b)|(\bET\b)|(?:(\/Cs\d+\s+cs\s+)?([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(rg|RG|scn?|SCN?)\b)|(?:([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(k|K|scn?|SCN?)\b)|(?:([0-9.]+)\s+(g|G|scn?|SCN?)\b)|((?:[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+re\s*)+(?:f\*|f\b|F\b|B\*|B\b))|(?<![0-9A-Za-z_\/.-])(f\*|f|F|B\*|B|S|s)(?![0-9A-Za-z_.-])/g;
-
-    function shouldCleanHighlightCategory(cat) {
-      if (!cat) return false;
-      if (selectedHighlightColors.has(cat)) return true;
-      if (optHideGreen && cat === 'green') return true;
-      return false;
-    }
+      /(\((?:[^()\\]|\\.)*\)|<[0-9A-Fa-f\s]*>|\/[A-Za-z0-9_+#.-]+)|(\bq\b)|(\bQ\b)|(\bBT\b)|(\bET\b)|(?:([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(k|K|scn?|SCN?)\b)|(?:(\/Cs\d+\s+cs\s+)?([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+(rg|RG|scn?|SCN?)\b)|(?:([0-9.]+)\s+(g|G|scn?|SCN?)\b)|((?:[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+[0-9.-]+\s+re\s*)+(?:f\*|f\b|F\b|B\*|B\b))|(?<![0-9A-Za-z_\/.-])(f\*|f|F|B\*|B|S|s)(?![0-9A-Za-z_.-])/g;
 
     function runStatefulHighlightCleaner(streamStr, pageNumber, pageTextRgb, pageLineRgb, pageBgRgb, collectAnswers) {
       const stateStack = [{ fill: null, stroke: null }];
@@ -2105,16 +2219,16 @@
           gPop,
           gBt,
           gEt,
-          gCsPrefix,
-          gR,
-          gG,
-          gB,
-          gRgbOp,
           gC,
           gM,
           gY,
           gK,
           gCmykOp,
+          gCsPrefix,
+          gR,
+          gG,
+          gB,
+          gRgbOp,
           gGrayVal,
           gGrayOp,
           gRectFill,
@@ -2148,7 +2262,28 @@
             inText = false;
             return match;
           }
-          // 4) RGB Renk Operatörleri (rg, RG, sc, SC, scn, SCN)
+          // 4) CMYK Renk Operatörleri (k, K, 4-bileşenli sc/scn) - RGB'den önce kontrol edilir
+          if (gCmykOp !== undefined) {
+            const c = parseFloat(gC);
+            const m = parseFloat(gM);
+            const y = parseFloat(gY);
+            const k = parseFloat(gK);
+            const r = (1 - c) * (1 - k);
+            const g = (1 - m) * (1 - k);
+            const b = (1 - y) * (1 - k);
+            const cat = classifyHighlightColor(r, g, b);
+            const top = stateStack[stateStack.length - 1];
+            const isStrokeCmyk = gCmykOp === 'K' || gCmykOp === 'SC' || gCmykOp === 'SCN';
+            if (isStrokeCmyk) top.stroke = cat;
+            else top.fill = cat;
+
+            if (!scanOnly && shouldCleanHighlightCategory(cat)) {
+              if (isStrokeCmyk) return inText ? `${pageLineRgb} RG` : `${pageBgRgb} RG`;
+              return inText ? `${pageTextRgb} rg` : `${pageBgRgb} rg`;
+            }
+            return match;
+          }
+          // 5) RGB Renk Operatörleri (rg, RG, 3-bileşenli sc/scn)
           if (gRgbOp !== undefined) {
             const csPrefix = gCsPrefix || '';
             const r = parseFloat(gR);
@@ -2173,27 +2308,6 @@
               }
               return match;
             }
-          }
-          // 5) CMYK Renk Operatörleri (k, K)
-          if (gCmykOp !== undefined) {
-            const c = parseFloat(gC);
-            const m = parseFloat(gM);
-            const y = parseFloat(gY);
-            const k = parseFloat(gK);
-            const r = (1 - c) * (1 - k);
-            const g = (1 - m) * (1 - k);
-            const b = (1 - y) * (1 - k);
-            const cat = classifyHighlightColor(r, g, b);
-            const top = stateStack[stateStack.length - 1];
-            const isStrokeCmyk = gCmykOp === 'K' || gCmykOp === 'SC' || gCmykOp === 'SCN';
-            if (isStrokeCmyk) top.stroke = cat;
-            else top.fill = cat;
-
-            if (!scanOnly && shouldCleanHighlightCategory(cat)) {
-              if (isStrokeCmyk) return inText ? `${pageLineRgb} RG` : `${pageBgRgb} RG`;
-              return inText ? `${pageTextRgb} rg` : `${pageBgRgb} rg`;
-            }
-            return match;
           }
           // 6) Gri Tonlama Operatörleri (g, G, tek bileşenli sc/scn) -> aktif vurgu rengini sıfırlar
           if (gGrayOp !== undefined) {
@@ -2877,6 +2991,9 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
+
+  window.getConvertedPdfBytes = () => convertedPdfBytes;
+  window.getConvertedPdfBlobUrl = () => convertedPdfBlobUrl;
 
   function switchTab(tab) {
     document.getElementById('tabBtnPreview').classList.toggle('active', tab === 'preview');
