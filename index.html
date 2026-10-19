@@ -937,6 +937,176 @@
       padding: 2px 7px;
       border-radius: 99px;
       pointer-events: none;
+      z-index: 10;
+    }
+
+    /* PC ve Mobil İçin Metin Katmanı (Metin Seçimi ve Hızlı Arama) */
+    .textLayer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      opacity: 1;
+      line-height: 1;
+      z-index: 5;
+      user-select: text;
+      -webkit-user-select: text;
+      pointer-events: auto;
+    }
+
+    .textLayer span,
+    .textLayer br {
+      color: transparent !important;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+      pointer-events: auto;
+    }
+
+    .textLayer ::selection {
+      background: rgba(37, 99, 235, 0.35) !important;
+      color: transparent !important;
+    }
+
+    .textLayer ::-moz-selection {
+      background: rgba(37, 99, 235, 0.35) !important;
+      color: transparent !important;
+    }
+
+    /* Arama Eşleşmesi Vurguları */
+    .textLayer span.search-match {
+      background-color: rgba(250, 204, 21, 0.65) !important;
+      box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.85);
+      border-radius: 2px;
+      color: transparent !important;
+    }
+
+    .textLayer span.search-match.active {
+      background-color: rgba(249, 115, 22, 0.9) !important;
+      box-shadow: 0 0 0 3px rgba(234, 88, 12, 1);
+    }
+
+    /* Dahili PDF Arama Çubuğu (Ctrl+F veya 🔍 Ara Butonu) */
+    .pdf-search-bar {
+      position: absolute;
+      top: 50px;
+      right: 18px;
+      z-index: 150;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 6px 10px;
+      box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+      color: #fff;
+    }
+
+    .pdf-search-bar.hidden {
+      display: none !important;
+    }
+
+    .search-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 7px;
+      padding: 4px 8px;
+    }
+
+    .search-icon {
+      font-size: 13px;
+      opacity: 0.85;
+      user-select: none;
+    }
+
+    #pdfSearchInput {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #ffffff;
+      font-size: 13px;
+      width: 175px;
+    }
+
+    #pdfSearchInput::placeholder {
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    .search-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .search-count {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      min-width: 44px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+
+    .search-nav-btn,
+    .search-close-btn {
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      border-radius: 6px;
+      width: 27px;
+      height: 27px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .search-nav-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .search-close-btn {
+      background: rgba(239, 68, 68, 0.35);
+      border-color: rgba(239, 68, 68, 0.55);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .search-close-btn:hover {
+      background: rgba(239, 68, 68, 0.7);
+    }
+
+    .pc-only-btn {
+      display: none;
+    }
+
+    @media (min-width: 961px) {
+      .pc-only-btn {
+        display: inline-flex;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .pdf-search-bar {
+        top: 44px;
+        left: 8px;
+        right: 8px;
+        justify-content: space-between;
+      }
+      #pdfSearchInput {
+        width: 120px;
+      }
     }
 
     .mobile-close-drawer-btn {
@@ -1266,12 +1436,35 @@
                 <span class="feature-pill">📐 Sıfır Kalite Kaybı</span>
               </div>
             </div>
+            <!-- Dahili PDF Arama Çubuğu (Ctrl+F veya 🔍 Ara Butonu) -->
+            <div id="pdfSearchBar" class="pdf-search-bar hidden">
+              <div class="search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input
+                  type="text"
+                  id="pdfSearchInput"
+                  placeholder="PDF'de ara (Ctrl+F)..."
+                  autocomplete="off"
+                  spellcheck="false"
+                  oninput="handleSearchInput(this.value)"
+                  onkeydown="handleSearchKeydown(event)"
+                />
+              </div>
+              <div class="search-actions">
+                <span id="pdfSearchCount" class="search-count">0/0</span>
+                <button type="button" class="search-nav-btn" id="searchPrevBtn" title="Önceki Eşleşme (Shift+Enter / ▲)" onclick="navigateSearch(-1)">▲</button>
+                <button type="button" class="search-nav-btn" id="searchNextBtn" title="Sonraki Eşleşme (Enter / ▼)" onclick="navigateSearch(1)">▼</button>
+                <button type="button" class="search-close-btn" title="Kapat (Esc)" onclick="closePdfSearchBar()">✕</button>
+              </div>
+            </div>
+
             <iframe id="pdfPreviewFrame" class="pdf-iframe" title="Temiz PDF Önizleme"></iframe>
-            <!-- Mobil & Tablet Tarayıcılar İçin Dahili Yüksek Çözünürlüklü PDF.js Görüntüleyici -->
+            <!-- İnteraktif PDF Görüntüleyici (Metin Seçimi ve Hızlı Arama Destekli) -->
             <div id="mobilePdfViewer" class="mobile-pdf-viewer">
               <div class="mobile-pdf-toolbar">
                 <div class="mobile-pdf-toolbar-group">
                   <span id="mobilePageCounter">📄 0 Sayfa</span>
+                  <button type="button" class="mobile-toolbar-btn" id="pdfSearchToggleBtn" onclick="togglePdfSearchBar()">🔍 Ara</button>
                 </div>
                 <div class="mobile-pdf-toolbar-group">
                   <button type="button" class="mobile-toolbar-btn" onclick="changeMobileZoom(-0.25)">➖</button>
@@ -1279,7 +1472,8 @@
                   <button type="button" class="mobile-toolbar-btn" onclick="changeMobileZoom(0.25)">➕</button>
                 </div>
                 <div class="mobile-pdf-toolbar-group">
-                  <button type="button" class="mobile-toolbar-btn" onclick="openPdfInNewTab()">🔍 Tam Ekran</button>
+                  <button type="button" class="mobile-toolbar-btn pc-only-btn" id="viewerModeToggleBtn" onclick="togglePcViewerMode()" title="Görüntüleme Modu (İnteraktif / Yerleşik)">🖥️ Yerleşik PDF</button>
+                  <button type="button" class="mobile-toolbar-btn" onclick="openPdfInNewTab()">↗️ Yeni Sekme</button>
                   <button type="button" class="mobile-toolbar-btn" style="background:#16a34a; border-color:#22c55e;" onclick="downloadCleanPdf()">📥 İndir</button>
                 </div>
               </div>
@@ -1454,6 +1648,9 @@
       mobileViewer.style.display = 'none';
       document.getElementById('mobilePdfPages').innerHTML = '';
     }
+    if (typeof pageTextContentCache !== 'undefined') pageTextContentCache.clear();
+    activePdfJsDoc = null;
+    if (typeof closePdfSearchBar === 'function') closePdfSearchBar();
     document.getElementById('emptyState').style.display = 'block';
 
     document.getElementById('downloadCleanPdfBtn').disabled = true;
@@ -2026,7 +2223,8 @@
       if (!btContent.includes(boldFont.fontName)) return btContent;
       let res = btContent.replace(/-[0-9.]+\s+Tw\s*/g, '');
       res = res.split(boldFont.fontName).join(regularFont.fontName);
-      res = res.replace(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g, (mStr, rawContent) => {
+
+      function mapLiteral(rawContent) {
         const bList = parsePdfLiteralString(rawContent);
         const mapped = bList.map((b) => {
           const u = boldFont.cmap.get(b);
@@ -2035,8 +2233,18 @@
           }
           return b;
         });
-        return encodePdfLiteralString(mapped) + ' Tj';
+        return encodePdfLiteralString(mapped);
+      }
+
+      res = res.replace(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g, (mStr, rawContent) => {
+        return mapLiteral(rawContent) + ' Tj';
       });
+
+      res = res.replace(/\[([\s\S]*?)\]\s*TJ/g, (mStr, arrContent) => {
+        const updated = arrContent.replace(/\(((?:[^()\\]|\\.)*)\)/g, (sm, raw) => mapLiteral(raw));
+        return `[${updated}] TJ`;
+      });
+
       return res;
     }
 
@@ -2786,13 +2994,25 @@
   }
 
   // ============================================================================
-  // ARAYÜZ GÜNCELLEME, MOBİL PDF.JS ÖNİZLEME, OPTİK FORM VE İNDİRME
+  // ARAYÜZ GÜNCELLEME, İNTERAKTİF PDF.JS ÖNİZLEME (TEXT LAYER & CTRL+F ARAMA), OPTİK FORM VE İNDİRME
   // ============================================================================
   let mobileZoomFactor = 1.0;
   let mobileRenderToken = 0;
   let activeMobileObserver = null;
+  let pcViewerMode = 'interactive'; // 'interactive' (varsayılan seçilebilir & aranabilir) | 'iframe' (yerleşik eklenti)
+  let activePdfJsDoc = null;
+  const pageTextContentCache = new Map();
+  let currentSearchQuery = '';
+  let currentSearchMatches = []; // [{ pageNumber, itemIndex, spanIndex, text }]
+  let currentSearchIndex = -1;
+  let searchDebounceTimer = null;
+  let activeRenderSinglePage = null;
+  let lastConvertedPageCount = 0;
+  let lastConvertedElapsedSec = '0';
+  let lastConvertedModeLabel = 'Vektörel';
+  let lastIsOriginal = false;
 
-  function useMobileCanvasViewer() {
+  function useMobileDevice() {
     const ua = navigator.userAgent || '';
     const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     const isIPadOS = navigator.maxTouchPoints > 1 && /Macintosh/.test(ua);
@@ -2809,15 +3029,285 @@
     window.open(convertedPdfBlobUrl, '_blank');
   }
 
+  function togglePcViewerMode() {
+    pcViewerMode = pcViewerMode === 'interactive' ? 'iframe' : 'interactive';
+    const btn = document.getElementById('viewerModeToggleBtn');
+    if (btn) {
+      btn.textContent = pcViewerMode === 'interactive' ? '🖥️ Yerleşik PDF' : '📄 Sayfa Görünümü';
+    }
+    if (convertedPdfBytes) {
+      updateUiWithConvertedPdf(lastConvertedPageCount, lastConvertedElapsedSec, lastConvertedModeLabel, lastIsOriginal);
+    }
+  }
+
   async function changeMobileZoom(delta) {
-    mobileZoomFactor = Math.min(2.25, Math.max(0.75, +(mobileZoomFactor + delta).toFixed(2)));
+    mobileZoomFactor = Math.min(2.5, Math.max(0.6, +(mobileZoomFactor + delta).toFixed(2)));
     const lbl = document.getElementById('mobileZoomLabel');
     if (lbl) lbl.textContent = `${Math.round(mobileZoomFactor * 100)}%`;
-    if (convertedPdfBytes && useMobileCanvasViewer()) {
+    if (convertedPdfBytes && pcViewerMode !== 'iframe') {
       await renderMobilePdfPreview(convertedPdfBytes);
     }
   }
 
+  // --- Dahili PDF Arama Mantığı (Ctrl+F, Türkçe Karakter Normalizasyonu, Eşleşme Vurgulama & Gezinme) ---
+  function normalizeSearchText(str) {
+    if (!str) return '';
+    return str
+      .replace(/İ/g, 'i')
+      .replace(/I/g, 'ı')
+      .toLowerCase()
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+  }
+
+  function togglePdfSearchBar() {
+    const bar = document.getElementById('pdfSearchBar');
+    if (!bar) return;
+    if (bar.classList.contains('hidden')) {
+      openPdfSearchBar();
+    } else {
+      closePdfSearchBar();
+    }
+  }
+
+  function openPdfSearchBar() {
+    const bar = document.getElementById('pdfSearchBar');
+    if (!bar) return;
+    bar.classList.remove('hidden');
+    const input = document.getElementById('pdfSearchInput');
+    if (input) {
+      input.focus();
+      input.select();
+      if (input.value.trim()) {
+        performPdfSearch(input.value.trim());
+      }
+    }
+  }
+
+  function closePdfSearchBar() {
+    const bar = document.getElementById('pdfSearchBar');
+    if (bar) bar.classList.add('hidden');
+    clearSearchHighlights();
+    currentSearchMatches = [];
+    currentSearchIndex = -1;
+    currentSearchQuery = '';
+    updateSearchCountUI();
+  }
+
+  function handleSearchInput(val) {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      performPdfSearch(val.trim());
+    }, 160);
+  }
+
+  function handleSearchKeydown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateSearch(e.shiftKey ? -1 : 1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closePdfSearchBar();
+    }
+  }
+
+  function updateSearchCountUI() {
+    const countEl = document.getElementById('pdfSearchCount');
+    if (!countEl) return;
+    if (!currentSearchQuery || currentSearchMatches.length === 0) {
+      countEl.textContent = currentSearchQuery ? '0/0' : '';
+    } else {
+      countEl.textContent = `${currentSearchIndex + 1}/${currentSearchMatches.length}`;
+    }
+  }
+
+  function clearSearchHighlights() {
+    document.querySelectorAll('.textLayer span.search-match').forEach((el) => {
+      el.classList.remove('search-match', 'active');
+    });
+  }
+
+  async function performPdfSearch(query) {
+    currentSearchQuery = query;
+    currentSearchMatches = [];
+    currentSearchIndex = -1;
+
+    if (!query || query.length < 1 || !activePdfJsDoc) {
+      clearSearchHighlights();
+      updateSearchCountUI();
+      return;
+    }
+
+    const normQuery = normalizeSearchText(query);
+    if (!normQuery) {
+      clearSearchHighlights();
+      updateSearchCountUI();
+      return;
+    }
+
+    const numPages = activePdfJsDoc.numPages;
+
+    for (let p = 1; p <= numPages; p++) {
+      let tc = pageTextContentCache.get(p);
+      if (!tc) {
+        try {
+          const page = await activePdfJsDoc.getPage(p);
+          tc = await page.getTextContent();
+          pageTextContentCache.set(p, tc);
+        } catch (_) {
+          continue;
+        }
+      }
+
+      const items = tc.items || [];
+      for (let i = 0; i < items.length; i++) {
+        const str = items[i].str;
+        if (!str) continue;
+        if (normalizeSearchText(str).includes(normQuery)) {
+          currentSearchMatches.push({
+            pageNumber: p,
+            itemIndex: i,
+            text: str
+          });
+        }
+      }
+
+      // Çok kelimeli veya boşluklu aramalarda yan yana parçaları kontrol et
+      if (normQuery.includes(' ')) {
+        let runningStr = '';
+        const itemMap = [];
+        for (let i = 0; i < items.length; i++) {
+          const s = items[i].str || '';
+          for (let c = 0; c < s.length; c++) itemMap.push(i);
+          runningStr += s + ' ';
+          itemMap.push(i);
+        }
+        const normRunning = normalizeSearchText(runningStr);
+        let startIdx = 0;
+        while ((startIdx = normRunning.indexOf(normQuery, startIdx)) !== -1) {
+          const matchedItemIdx = itemMap[startIdx] !== undefined ? itemMap[startIdx] : 0;
+          if (!currentSearchMatches.some((m) => m.pageNumber === p && m.itemIndex === matchedItemIdx)) {
+            currentSearchMatches.push({
+              pageNumber: p,
+              itemIndex: matchedItemIdx,
+              text: items[matchedItemIdx] ? items[matchedItemIdx].str : ''
+            });
+          }
+          startIdx += normQuery.length;
+        }
+      }
+    }
+
+    // Halihazırda çizilmiş sayfalardaki eşleşmeleri hemen vurgula
+    document.querySelectorAll('.mobile-page-card[data-rendered="1"]').forEach((card) => {
+      highlightMatchesOnCard(card, parseInt(card.dataset.page, 10));
+    });
+
+    if (currentSearchMatches.length > 0) {
+      currentSearchIndex = 0;
+      updateSearchCountUI();
+      await goToSearchMatch(0);
+    } else {
+      updateSearchCountUI();
+    }
+  }
+
+  function highlightMatchesOnCard(cardEl, pageNumber) {
+    const textLayer = cardEl.querySelector('.textLayer');
+    if (!textLayer) return;
+    const spans = textLayer.querySelectorAll('span');
+    if (!currentSearchQuery) {
+      spans.forEach((s) => s.classList.remove('search-match', 'active'));
+      return;
+    }
+
+    const normQuery = normalizeSearchText(currentSearchQuery);
+    const activeMatch = currentSearchMatches[currentSearchIndex];
+
+    const matchedSpansOnThisPage = [];
+    spans.forEach((span) => {
+      const normSpan = normalizeSearchText(span.textContent);
+      const isMatch = normSpan && normSpan.includes(normQuery);
+
+      if (isMatch) {
+        span.classList.add('search-match');
+        span.classList.remove('active');
+        matchedSpansOnThisPage.push(span);
+      } else {
+        span.classList.remove('search-match', 'active');
+      }
+    });
+
+    if (activeMatch && activeMatch.pageNumber === pageNumber) {
+      const matchesOnThisPage = currentSearchMatches.filter((m) => m.pageNumber === pageNumber);
+      const matchIndexOnPage = matchesOnThisPage.indexOf(activeMatch);
+      if (matchIndexOnPage >= 0 && matchIndexOnPage < matchedSpansOnThisPage.length) {
+        matchedSpansOnThisPage[matchIndexOnPage].classList.add('active');
+      } else if (matchedSpansOnThisPage.length > 0) {
+        matchedSpansOnThisPage[0].classList.add('active');
+      }
+    }
+  }
+
+  async function navigateSearch(delta) {
+    if (currentSearchMatches.length === 0) return;
+    currentSearchIndex = (currentSearchIndex + delta + currentSearchMatches.length) % currentSearchMatches.length;
+    updateSearchCountUI();
+    await goToSearchMatch(currentSearchIndex);
+  }
+
+  async function goToSearchMatch(index) {
+    const match = currentSearchMatches[index];
+    if (!match) return;
+
+    const card = document.querySelector(`.mobile-page-card[data-page="${match.pageNumber}"]`);
+    if (card) {
+      if (card.dataset.rendered !== '1' && typeof activeRenderSinglePage === 'function') {
+        await activeRenderSinglePage(card);
+      }
+
+      document.querySelectorAll('.mobile-page-card[data-rendered="1"]').forEach((c) => {
+        highlightMatchesOnCard(c, parseInt(c.dataset.page, 10));
+      });
+
+      const spans = card.querySelectorAll('.textLayer span');
+      let targetSpan = spans[match.itemIndex];
+      if (!targetSpan || !targetSpan.classList.contains('search-match')) {
+        targetSpan =
+          card.querySelector('.textLayer span.search-match.active') ||
+          card.querySelector('.textLayer span.search-match');
+      }
+
+      if (targetSpan) {
+        targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+
+  // Global Tuş Dinleyici (Ctrl+F / Cmd+F ve Escape)
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      const panePreview = document.getElementById('panePreview');
+      if (panePreview && panePreview.classList.contains('active') && convertedPdfBytes) {
+        e.preventDefault();
+        openPdfSearchBar();
+      }
+    } else if (e.key === 'Escape') {
+      const searchBar = document.getElementById('pdfSearchBar');
+      if (searchBar && !searchBar.classList.contains('hidden')) {
+        closePdfSearchBar();
+      }
+    }
+  });
+
+  // --- İnteraktif PDF.js Görüntüleyici (Canvas + Şeffaf Metin Katmanı) ---
   async function renderMobilePdfPreview(pdfBytes) {
     if (!window.pdfjsLib || !pdfBytes) return;
     const myRenderId = ++mobileRenderToken;
@@ -2829,11 +3319,14 @@
     const container = document.getElementById('mobilePdfPages');
     const counterEl = document.getElementById('mobilePageCounter');
     container.innerHTML =
-      '<div style="color:#e2e8f0; padding:24px; font-size:13px;">⏳ Sayfalar telefona uygun hazırlanıyor...</div>';
+      '<div style="color:#e2e8f0; padding:24px; font-size:13px;">⏳ Sayfalar hazırlanıyor...</div>';
 
     try {
       const pdfDoc = await loadPdfJsDocument(pdfBytes);
       if (myRenderId !== mobileRenderToken) return;
+
+      activePdfJsDoc = pdfDoc;
+      pageTextContentCache.clear();
 
       const numPages = pdfDoc.numPages;
       if (counterEl) counterEl.textContent = `📄 ${numPages} Sayfa`;
@@ -2842,8 +3335,9 @@
       const firstPage = await pdfDoc.getPage(1);
       if (myRenderId !== mobileRenderToken) return;
       const baseVp = firstPage.getViewport({ scale: 1 });
-      const containerWidth = Math.max(280, (container.clientWidth || window.innerWidth) - 20);
-      const fitScale = (containerWidth / baseVp.width) * mobileZoomFactor;
+      const availableWidth = Math.max(280, (container.clientWidth || window.innerWidth) - 36);
+      const targetWidth = window.innerWidth > 960 ? Math.min(availableWidth, 840) : availableWidth;
+      const fitScale = (targetWidth / baseVp.width) * mobileZoomFactor;
       const dpr = Math.min(window.devicePixelRatio || 2, 2.5);
 
       const pageCards = [];
@@ -2877,15 +3371,47 @@
           const canvas = document.createElement('canvas');
           canvas.width = vp.width;
           canvas.height = vp.height;
-          canvas.style.width = `${Math.round(vp.width / dpr)}px`;
-          canvas.style.height = `${Math.round(vp.height / dpr)}px`;
+          const cssW = Math.round(vp.width / dpr);
+          const cssH = Math.round(vp.height / dpr);
+          canvas.style.width = `${cssW}px`;
+          canvas.style.height = `${cssH}px`;
           const ctx = canvas.getContext('2d');
           await page.render({ canvasContext: ctx, viewport: vp }).promise;
           if (myRenderId !== mobileRenderToken) return;
+
+          // Hem PC hem mobilde metin seçimi (kopyalama) ve Ctrl+F arama için TextLayer
+          const textLayerDiv = document.createElement('div');
+          textLayerDiv.className = 'textLayer';
+          textLayerDiv.style.width = `${cssW}px`;
+          textLayerDiv.style.height = `${cssH}px`;
+
+          let textContent = pageTextContentCache.get(pNum);
+          if (!textContent) {
+            textContent = await page.getTextContent();
+            pageTextContentCache.set(pNum, textContent);
+          }
+          const textVp = page.getViewport({ scale: fitScale });
+          await pdfjsLib.renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: textVp,
+            textDivs: []
+          }).promise;
+          if (myRenderId !== mobileRenderToken) return;
+
           cardEl.style.minHeight = '0';
           cardEl.insertBefore(canvas, cardEl.firstChild);
-        } catch (_) {}
+          cardEl.insertBefore(textLayerDiv, cardEl.querySelector('.mobile-page-badge'));
+
+          if (currentSearchQuery) {
+            highlightMatchesOnCard(cardEl, pNum);
+          }
+        } catch (err) {
+          console.warn(`Sayfa ${pNum} textLayer/canvas çizim hatası:`, err);
+        }
       }
+
+      activeRenderSinglePage = renderSingleMobilePage;
 
       // İlk 3 sayfayı anında çiz, geri kalanını kaydırdıkça yüksek çözünürlükte çiz
       for (let i = 0; i < Math.min(3, pageCards.length); i++) {
@@ -2910,17 +3436,22 @@
         }
       }
     } catch (e) {
-      console.error('Mobil PDF önizleme hatası:', e);
+      console.error('İnteraktif PDF önizleme hatası:', e);
       if (myRenderId === mobileRenderToken) {
         container.innerHTML =
           '<div style="color:#fecaca; padding:24px; font-size:13px; line-height:1.6;">' +
-          '⚠️ Önizleme bu tarayıcıda oluşturulamadı (' + (e && e.message ? e.message : 'bilinmeyen hata') + ').<br/>' +
-          'Temizlenmiş PDF yine de hazır: üstteki <strong>📥 İndir</strong> veya <strong>🔍 Tam Ekran</strong> butonunu kullanın.</div>';
+          '⚠️ Önizleme oluşturulamadı (' + (e && e.message ? e.message : 'bilinmeyen hata') + ').<br/>' +
+          'Temizlenmiş PDF yine de hazır: üstteki <strong>📥 İndir</strong> veya <strong>↗️ Yeni Sekme</strong> butonunu kullanabilirsiniz.</div>';
       }
     }
   }
 
   function updateUiWithConvertedPdf(pageCount, elapsedSec, modeLabel, isOriginal = false) {
+    lastConvertedPageCount = pageCount;
+    lastConvertedElapsedSec = elapsedSec;
+    lastConvertedModeLabel = modeLabel;
+    lastIsOriginal = isOriginal;
+
     if (convertedPdfBlobUrl) {
       URL.revokeObjectURL(convertedPdfBlobUrl);
     }
@@ -2932,16 +3463,17 @@
     const emptyState = document.getElementById('emptyState');
     emptyState.style.display = 'none';
 
-    const isMobileView = useMobileCanvasViewer();
-    if (isMobileView) {
+    // PC'de varsayılan mod: seçilebilir & aranabilir interaktif görüntüleyici
+    // Kullanıcı isterse "Yerleşik PDF" butonuyla tarayıcı iframe moduna geçebilir
+    if (pcViewerMode === 'iframe' && !useMobileDevice()) {
+      mobileViewer.style.display = 'none';
+      iframe.style.display = 'block';
+      iframe.src = convertedPdfBlobUrl;
+    } else {
       iframe.style.display = 'none';
       iframe.src = 'about:blank';
       mobileViewer.style.display = 'flex';
       renderMobilePdfPreview(convertedPdfBytes);
-    } else {
-      mobileViewer.style.display = 'none';
-      iframe.style.display = 'block';
-      iframe.src = convertedPdfBlobUrl;
     }
 
     document.getElementById('downloadCleanPdfBtn').disabled = false;
@@ -2950,7 +3482,8 @@
 
     document.getElementById('answerCountBadge').textContent = extractedAnswers.length;
 
-    const mobileJumpHtml = isMobileView
+    const isMobile = useMobileDevice();
+    const mobileJumpHtml = isMobile
       ? `<div style="margin-top:8px;"><button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="scrollToPreviewOnMobile()">⬇️ PDF Test Görünümüne İn</button></div>`
       : '';
 
